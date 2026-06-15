@@ -67,6 +67,7 @@ SUBCATEGORIES = {
     1:  {"cat": "NADI4U", "mod": "Entrepreneur",     "label": "NADI4U-Entrepreneur"},
     2:  {"cat": "NADI4U", "mod": "LifelongLearning", "label": "NADI4U-LifelongLearning"},
     3:  {"cat": "NADI4U", "mod": "Wellbeing",        "label": "NADI4U-Wellbeing"},
+    4:  {"cat": "NADI4U", "mod": "Awareness",        "label": "NADI4U-Awareness"},
     8:  {"cat": "NADI2U", "mod": "Wellbeing",        "label": "NADI2U-Wellbeing"},
 }
 
