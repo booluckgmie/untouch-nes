@@ -391,7 +391,7 @@ function buildShell(id){
       <div class="page-hdr">
         <div><div class="page-title"><span class="${nd.cat==='NADI4U'?'cat-4u':'cat-2u'}">${nd.cat}</span>${ce(lbl)}</div>
         <div class="page-sub">${nd.progs.map(p=>ce(p)).join(' &nbsp;·&nbsp; ')}</div></div>
-        <div class="page-meta">Live DB &nbsp;·&nbsp; ${d.fetched||'today'}<br>${d.start_date||d.end_date?`${d.start_date||'…'} → ${d.end_date||'…'}`:'All dates'}${d.programs_filter&&d.programs_filter.length?` &nbsp;·&nbsp; ${d.programs_filter.length} prog`:''}</div>
+        <div class="page-meta">Updated ${d.fetched||'today'}<br>${d.start_date?`${d.start_date} → ${d.end_date||'present'}`:'All dates'}</div>
       </div>
     </div>
     <div class="tab-bar">
