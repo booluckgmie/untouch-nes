@@ -197,9 +197,12 @@ table.t-mo tfoot td.f-st {position:sticky;left:240px;z-index:3;background:#fafaf
     <div class="sb-sub" id="sb-upd">Connecting…</div>
   </div>
   <div class="sb-filter">
-    <label>Data period</label>
-    <div style="font-size:11px;color:var(--t2);padding:3px 0">2026-01-01 → present</div>
-    <div style="font-size:10px;color:var(--green);margin-top:5px;font-weight:600">↻ Auto-refreshes hourly</div>
+    <label>Date filter</label>
+    <input type="date" id="drS" value="2026-01-01" title="Start date">
+    <input type="date" id="drE" title="End date">
+    <button class="filter-apply" onclick="applyClientFilter()">Apply filter</button>
+    <button class="filter-clr" onclick="clearClientFilter()">Clear</button>
+    <div style="font-size:9px;color:var(--t3);margin-top:4px">↻ Data auto-refreshes hourly</div>
   </div>
   <div class="sb-nav">
     <div class="sb-label">View</div>
@@ -230,7 +233,7 @@ const fmt=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1).replace(/\.
 const fN=n=>(+n).toLocaleString();
 const ce=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const hc=v=>v===0?'h0':v<=5?'h1':v<=20?'h2':v<=99?'h3':'h4';
-let SUBS={},NI=[],STATES=[],curSub=null,curTab='nadi',tRowsAll=[],selWeek=null,selMonth=null,_monthSeq={},_sd='',_ed='';
+let SUBS={},NI=[],STATES=[],curSub=null,curTab='nadi',tRowsAll=[],selWeek=null,selMonth=null,_monthSeq={},_sd='',_ed='',_clientSd='2026-01-01',_clientEd='',_filteredMI=null;
 
 async function boot(){
   try{
@@ -245,8 +248,89 @@ async function boot(){
   }
 }
 
-async function applyFilter(){ /* static mode — data refreshes hourly */ }
-function clearFilter(){ /* static mode */ }
+function _computeFilteredMI(){
+  const d=window._D;if(!d){_filteredMI=null;return;}
+  const months=(d.monthly||{}).months||[];
+  const sd=_clientSd?new Date(_clientSd):null;
+  const ed=_clientEd?new Date(_clientEd):null;
+  if(!sd&&!ed){_filteredMI=null;return;}
+  const MN={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  _filteredMI=[];
+  months.forEach((m,i)=>{
+    const[mn,yr]=m.split(' ');
+    const mS=new Date(parseInt(yr),MN[mn],1),mE=new Date(parseInt(yr),MN[mn]+1,0);
+    if(sd&&mE<sd)return;if(ed&&mS>ed)return;
+    _filteredMI.push(i);
+  });
+}
+
+function rebuildTRowsAll(){
+  const d=window._D;if(!d)return;
+  const nd=d.nadi,sm=d.monthly,mi=_filteredMI;
+  if(!mi){
+    const aMap={};nd.rows.forEach(([i,e,p,pr])=>aMap[i]={e,p,pr});
+    tRowsAll=NI.map((n,i)=>{
+      const[ref,nm,state]=n,a=aMap[i];
+      const te=a?a.e:0,tp=a?a.p:0,pr=a?a.pr:{};
+      const ap=Object.keys(pr).length;
+      return{i,ref,nm,state,te,tp,pr,ap,tp2:nd.progs.length,st:(te===0||tp===0)?'u':ap<nd.progs.length?'p':'a'};
+    });
+  } else {
+    const aMap={};
+    (sm.rows||[]).forEach(([idx,tot,pax,pr])=>{
+      const te=mi.reduce((s,j)=>s+((Array.isArray(tot)?tot[j]:0)||0),0);
+      const tp=mi.reduce((s,j)=>s+((Array.isArray(pax)?pax[j]:0)||0),0);
+      const prF={};
+      if(pr&&typeof pr==='object')Object.entries(pr).forEach(([pk,pd])=>{
+        const ev=mi.reduce((s,j)=>s+(((pd.ev||[])[j])||0),0);
+        const px=mi.reduce((s,j)=>s+(((pd.px||[])[j])||0),0);
+        if(ev>0||px>0)prF[pk]=[ev,px];
+      });
+      aMap[idx]={e:te,p:tp,pr:prF};
+    });
+    tRowsAll=NI.map((n,i)=>{
+      const[ref,nm,state]=n,a=aMap[i];
+      const te=a?a.e:0,tp=a?a.p:0,pr=a?a.pr:{};
+      const ap=Object.keys(pr).length;
+      return{i,ref,nm,state,te,tp,pr,ap,tp2:nd.progs.length,st:(te===0||tp===0)?'u':ap<nd.progs.length?'p':'a'};
+    });
+  }
+}
+
+function getFilteredWeekly(){
+  const d=window._D;if(!d)return null;
+  const wk=d.weekly;
+  const sd=_clientSd?new Date(_clientSd):null;
+  const ed=_clientEd?new Date(_clientEd):null;
+  if(!sd&&!ed)return wk;
+  const filtWeeks=wk.weeks.filter(w=>{
+    if(!w.ws)return true;const wd=new Date(w.ws);
+    return(!sd||wd>=sd)&&(!ed||wd<=ed);
+  });
+  const ok=new Set(filtWeeks.map(w=>w.k));
+  const filtNw={};Object.entries(wk.nw).forEach(([k,v])=>{if(ok.has(k))filtNw[k]=v;});
+  return{...wk,weeks:filtWeeks,nw:filtNw,zero:wk.zero.filter(e=>ok.has(e.wk)),
+    active_refs:[...new Set(Object.values(filtNw).flatMap(refs=>Object.keys(refs)))]};
+}
+
+function applyClientFilter(){
+  _clientSd=(document.getElementById('drS')||{}).value||'';
+  _clientEd=(document.getElementById('drE')||{}).value||'';
+  if(!window._D)return;
+  _computeFilteredMI();rebuildTRowsAll();
+  if(curSub)showTab(curTab||'nadi');
+}
+
+function clearClientFilter(){
+  _clientSd='2026-01-01';_clientEd='';_filteredMI=null;
+  const ds=document.getElementById('drS'),de=document.getElementById('drE');
+  if(ds)ds.value='2026-01-01';if(de)de.value='';
+  rebuildTRowsAll();
+  if(curSub)showTab(curTab||'nadi');
+}
+// legacy aliases (called from nowhere in static build, kept for safety)
+async function applyFilter(){applyClientFilter();}
+function clearFilter(){clearClientFilter();}
 
 async function autoFetchAll(){
   const all=Object.values(SUBS).sort((a,b)=>a.id-b.id);
@@ -378,13 +462,7 @@ async function loadSubData(id){
 function buildShell(id){
   const d=window._D,nd=d.nadi,col=COL[nd.mod]||'#555',lbl=nd.mod==='LifelongLearning'?'Lifelong Learning':nd.mod;
   const s=SUBS[id]||{};const totZ=d.weekly.zero.length;
-  const aMap={};nd.rows.forEach(([i,e,p,pr])=>aMap[i]={e,p,pr});
-  tRowsAll=NI.map((n,i)=>{
-    const[ref,nm,state]=n,a=aMap[i];
-    const te=a?a.e:0,tp=a?a.p:0,pr=a?a.pr:{};
-    const ap=Object.keys(pr).length;
-    return{i,ref,nm,state,te,tp,pr,ap,tp2:nd.progs.length,st:(te===0||tp===0)?'u':ap<nd.progs.length?'p':'a'};
-  });
+  _computeFilteredMI();rebuildTRowsAll();
   document.getElementById('main').innerHTML=`
     <div class="top-bar">
       <div class="bc">NES &rsaquo; <a onclick="gOv(document.getElementById('navOv'))">Overview</a> &rsaquo; ${nd.cat} &rsaquo; <span>${ce(lbl)}</span></div>
@@ -405,10 +483,11 @@ function buildShell(id){
 function showTab(t){
   ['tN','tM','tW'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.className='tab-btn'+(['nadi','monthly','weekly'][i]===t?' on':'');});
   const d=window._D;if(!d)return;
+  curTab=t;
   if(t!=='weekly'){selWeek=null;selMonth=null;}
   if(t==='nadi')renderNadi(d);
   else if(t==='monthly')renderMonthly(d);
-  else renderWeekly(d);
+  else renderWeekly(getFilteredWeekly()||d.weekly);
 }
 
 /* ── NADI INDEX ── */
@@ -471,7 +550,8 @@ function renderMonthly(d){
     aMap[i]={tot:Array.isArray(tot)?tot:[], pax:Array.isArray(pax)?pax:[], pr:(pr&&typeof pr==='object')?pr:{}};
   });
 
-  const mTot=months.map((_,mi)=>(sm.rows||[]).reduce((s,r)=>s+((Array.isArray(r[1])?r[1][mi]:0)||0),0));
+  const dispMonths=_filteredMI?_filteredMI.map(i=>months[i]):months;
+  const mTot=(_filteredMI||months.map((_,i)=>i)).map(mi=>(sm.rows||[]).reduce((s,r)=>s+((Array.isArray(r[1])?r[1][mi]:0)||0),0));
   const maxT=Math.max(...mTot,1);
 
   window._mAMap=aMap; window._mProgs=progs; window._mMonths=months;
@@ -488,15 +568,15 @@ function renderMonthly(d){
     `<th style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3)">Pax</th>`
   ).join('');
 
-  const sumBars=mTot.map((v,i)=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px" title="${months[i]}: ${fN(v)} events">
+  const sumBars=mTot.map((v,i)=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px" title="${dispMonths[i]}: ${fN(v)} events">
       <div style="width:100%;height:${v>0?Math.max(3,Math.round(v/maxT*38)):2}px;background:${v>0?col:'#e8e6e3'};border-radius:2px 2px 0 0;align-self:flex-end"></div>
-      <span style="font-size:7px;color:var(--t3);text-align:center;overflow:hidden;white-space:nowrap;width:100%">${mH(months[i])}</span>
+      <span style="font-size:7px;color:var(--t3);text-align:center;overflow:hidden;white-space:nowrap;width:100%">${mH(dispMonths[i])}</span>
     </div>`).join('');
 
   document.getElementById('tB').innerHTML=`
     <div class="kpi-row">
-      <div class="kpi"><div class="kpi-l">Period</div><div class="kpi-v" style="font-size:14px;font-weight:600">${months[0]||'—'}</div><div class="kpi-s">to ${months[months.length-1]||'—'}</div></div>
-      <div class="kpi"><div class="kpi-l">Months</div><div class="kpi-v" style="color:${col}">${nm}</div><div class="kpi-s">reporting periods</div></div>
+      <div class="kpi"><div class="kpi-l">Period</div><div class="kpi-v" style="font-size:14px;font-weight:600">${dispMonths[0]||'—'}</div><div class="kpi-s">to ${dispMonths[dispMonths.length-1]||'—'}</div></div>
+      <div class="kpi"><div class="kpi-l">Months</div><div class="kpi-v" style="color:${col}">${dispMonths.length}</div><div class="kpi-s">reporting periods</div></div>
       <div class="kpi"><div class="kpi-l">Programs</div><div class="kpi-v" style="color:${col}">${np}</div><div class="kpi-s">in this subcategory</div></div>
       <div class="kpi"><div class="kpi-l">Active NADI</div><div class="kpi-v" style="color:var(--green)">${nd.a}</div><div class="kpi-s">of 1,099</div></div>
     </div>
@@ -592,8 +672,9 @@ function fM(){
 
   document.getElementById('mTb').innerHTML=f.map(r=>{
     const a=aMap[r.i]||{tot:[],pax:[],pr:{}};
-    const progEv=progs.map((_,pi)=>((a.pr[String(pi)]||{}).ev||[]).reduce((s,v)=>s+(v||0),0));
-    const progPx=progs.map((_,pi)=>((a.pr[String(pi)]||{}).px||[]).reduce((s,v)=>s+(v||0),0));
+    const mi=_filteredMI;
+    const progEv=progs.map((_,pi)=>{const ev=((a.pr[String(pi)]||{}).ev||[]);return mi?mi.reduce((s,j)=>s+(ev[j]||0),0):ev.reduce((s,v)=>s+(v||0),0);});
+    const progPx=progs.map((_,pi)=>{const px=((a.pr[String(pi)]||{}).px||[]);return mi?mi.reduce((s,j)=>s+(px[j]||0),0):px.reduce((s,v)=>s+(v||0),0);});
     const totEv=progEv.reduce((s,v)=>s+v,0);
     const totPx=progPx.reduce((s,v)=>s+v,0);
     grandEv+=totEv; grandPx+=totPx;
@@ -626,11 +707,14 @@ function openMoPanel(nadi_idx){
   const col=window._mCol||'#555', PROG_COLORS=window._mProgColors||['#4c44b0','#0b7575','#0b7a58','#a05208','#1650a0'];
   const mH=window._mMH||(m=>{const[mn,yr]=m.split(' ');return mn+"'"+yr.slice(2);});
   const ni=NI[nadi_idx]||[], [ref,nm2,state]=ni;
-  const a=aMap[nadi_idx]||{tot:[],pax:[],pr:{}}, tot=a.tot||[], px=a.pax||[];
-  const maxV=Math.max(...tot,1);
+  const a=aMap[nadi_idx]||{tot:[],pax:[],pr:{}};
+  const dispMonths2=_filteredMI?_filteredMI.map(i=>months[i]):months;
+  const dispTot=_filteredMI?_filteredMI.map(i=>(a.tot||[])[i]||0):(a.tot||[]);
+  const dispPx=_filteredMI?_filteredMI.map(i=>(a.pax||[])[i]||0):(a.pax||[]);
+  const maxV=Math.max(...dispTot,1);
 
-  const bars=months.map((m,mi)=>{
-    const v=tot[mi]||0, p=px[mi]||0, h=v>0?Math.max(4,Math.round(v/maxV*80)):2;
+  const bars=dispMonths2.map((m,i)=>{
+    const v=dispTot[i]||0, p=dispPx[i]||0, h=v>0?Math.max(4,Math.round(v/maxV*80)):2;
     return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px" title="${m}: ${fN(v)} events · ${fN(p)} pax">
       <div style="font-size:8px;color:var(--t2);font-weight:${v?600:400};text-align:center">${v||''}</div>
       <div style="flex:1;display:flex;align-items:flex-end;width:100%">
@@ -638,7 +722,7 @@ function openMoPanel(nadi_idx){
       </div>
       <span style="font-size:7px;color:var(--t3);white-space:nowrap">${mH(m)}</span>
     </div>`;
-  }).join('');
+  }).join('');  // bars end
 
   const progRows=progs.map((p,pi)=>{
     const pc=PROG_COLORS[pi%PROG_COLORS.length];
@@ -1139,11 +1223,14 @@ function renderPanelSum(ni_idx,ref){
     // Monthly spark
     const sm=d.monthly;const smMap={};
     (sm.rows||[]).forEach(r=>{smMap[r[0]]=Array.isArray(r[1])?r[1]:[];});
-    const vals=smMap[ni_idx]||[];const maxV=Math.max(...vals,1);
-    if(vals.some(v=>v>0)){
+    const _sv=smMap[ni_idx]||[];
+    const dispVals=_filteredMI?_filteredMI.map(i=>_sv[i]||0):_sv;
+    const dispMths=_filteredMI?_filteredMI.map(i=>sm.months[i]||''):sm.months;
+    const maxV=Math.max(...dispVals,1);
+    if(dispVals.some(v=>v>0)){
       html+=`<div style="margin-top:12px;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">Monthly trend</div>
-        <div class="spark">${vals.map((v,i)=>`<div style="flex:1;height:${Math.max(v>0?3:0,Math.round(v/maxV*26))}px;background:${v>0?col:'#e8e6e3'};border-radius:2px 2px 0 0;align-self:flex-end" title="${sm.months[i]}: ${v}"></div>`).join('')}</div>
-        <div style="display:flex;margin-top:2px">${sm.months.map(m=>`<span style="flex:1;text-align:center;font-size:8px;color:var(--t3);overflow:hidden">${m.slice(0,3)}</span>`).join('')}</div>`;
+        <div class="spark">${dispVals.map((v,i)=>`<div style="flex:1;height:${Math.max(v>0?3:0,Math.round(v/maxV*26))}px;background:${v>0?col:'#e8e6e3'};border-radius:2px 2px 0 0;align-self:flex-end" title="${dispMths[i]}: ${v}"></div>`).join('')}</div>
+        <div style="display:flex;margin-top:2px">${dispMths.map(m=>`<span style="flex:1;text-align:center;font-size:8px;color:var(--t3);overflow:hidden">${m.slice(0,3)}</span>`).join('')}</div>`;
     }
     // Zero events for this NADI
     const nadiZero=d.weekly.zero.filter(e=>e.ref===ref);
