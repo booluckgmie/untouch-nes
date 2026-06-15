@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NES Analytics Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%234c44b0'/><text x='16' y='22' text-anchor='middle' font-size='18' fill='white' font-family='sans-serif' font-weight='bold'>N</text></svg>">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f4f2;--card:#fff;--line:#e6e4e1;--line2:#f0eeed;
+  --t1:#111;--t2:#555;--t3:#999;
+  --purple:#4c44b0;--green:#0b7a58;--red:#b83232;--amber:#a05208;
+  --rc:#e24b4a;--pc:#ef9f27;--cc:#1d9e75;
+}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:13px;color:var(--t1);background:var(--bg);overflow:hidden}
+.shell{display:grid;grid-template-columns:220px 1fr;height:100vh}
+/* SIDEBAR */
+.sb{border-right:1px solid var(--line);background:var(--card);display:flex;flex-direction:column;overflow:hidden}
+.sb-top{padding:16px 16px 12px;border-bottom:1px solid var(--line2);flex-shrink:0}
+.sb-logo{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--t3);margin-bottom:2px}
+.sb-title{font-size:13px;font-weight:700}
+.sb-sub{font-size:10px;color:var(--t3);margin-top:1px}
+.sb-nav{flex:1;overflow-y:auto;padding:10px 8px}
+.sb-label{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.6px;padding:8px 8px 3px}
+.sb-btn{display:flex;align-items:center;gap:8px;width:100%;padding:7px 9px;border:none;
+  background:none;cursor:pointer;border-radius:6px;color:var(--t2);font-size:12px;
+  text-align:left;transition:background .1s,color .1s}
+.sb-btn:hover{background:var(--bg);color:var(--t1)}
+.sb-btn.on{background:var(--purple);color:#fff}
+.sb-btn .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.sb-btn .lbl{flex:1;line-height:1.4}
+.sb-btn .sdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sb-div{height:1px;background:var(--line2);margin:6px 8px}
+.fetch-btn{display:flex;align-items:center;justify-content:center;gap:5px;
+  width:calc(100% - 16px);margin:3px 8px 6px;padding:5px 8px;font-size:11px;
+  border:1px dashed var(--line);border-radius:6px;background:none;
+  cursor:pointer;color:var(--t3);transition:all .15s}
+.fetch-btn:hover{border-color:var(--purple);color:var(--purple)}
+.fetch-btn.loading{border-color:var(--amber);color:var(--amber)}
+.fetch-btn.ready{border-color:var(--green);color:var(--green)}
+/* MAIN */
+.main{display:flex;flex-direction:column;overflow:hidden;height:100vh}
+.top-bar{padding:14px 24px 0;flex-shrink:0}
+.bc{font-size:11px;color:var(--t3);margin-bottom:10px;display:flex;gap:5px}
+.bc a{color:var(--t2);cursor:pointer}.bc a:hover{text-decoration:underline}
+.page-hdr{display:flex;justify-content:space-between;align-items:flex-start}
+.page-title{font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:3px}
+.page-sub{font-size:11px;color:var(--t3)}
+.page-meta{font-size:10px;color:var(--t3);text-align:right;line-height:1.7}
+/* TABS */
+.tab-bar{display:flex;border-bottom:1px solid var(--line);padding:0 24px;flex-shrink:0;margin-top:12px}
+.tab-btn{padding:8px 14px;font-size:12px;border:none;background:none;cursor:pointer;
+  color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:400;white-space:nowrap}
+.tab-btn:hover{color:var(--t1)}
+.tab-btn.on{color:var(--purple);border-bottom-color:var(--purple);font-weight:600}
+/* KPI */
+.kpi-row{display:flex;gap:10px;padding:12px 24px;flex-shrink:0}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:7px;padding:10px 14px;flex:1}
+.kpi-l{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.kpi-v{font-size:20px;font-weight:700;letter-spacing:-.5px;line-height:1}
+.kpi-s{font-size:10px;color:var(--t2);margin-top:3px}
+/* TABLE AREA */
+.content{flex:1;overflow:hidden;display:flex;flex-direction:column;padding:0 24px 14px}
+.toolbar{display:flex;gap:7px;align-items:center;margin-bottom:8px;flex-shrink:0;flex-wrap:wrap}
+.toolbar input,.toolbar select{font-size:12px;padding:5px 9px;border:1px solid var(--line);
+  border-radius:6px;background:var(--card);color:var(--t1);height:29px}
+.toolbar input{width:190px}
+.fc{font-size:11px;color:var(--t3);margin-left:auto}
+.tbl-wrap{flex:1;overflow:auto;border:1px solid var(--line);border-radius:8px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{position:sticky;top:0;z-index:2;background:#fafaf8;text-align:left;
+  padding:7px 10px;font-size:10px;font-weight:600;color:var(--t3);
+  text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--line);white-space:nowrap}
+tbody td{padding:6px 10px;border-bottom:1px solid var(--line2);vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#fafaf9;cursor:pointer}
+tbody tr.sel td{background:#eeedfb}
+/* MONTHLY TABLE */
+table.t-mo{min-width:max-content}
+/* Monthly table — double header rows */
+table.t-mo thead tr:nth-child(1) th{position:sticky;top:0;z-index:3;background:#fafaf8;white-space:nowrap}
+table.t-mo thead tr:nth-child(2) th{position:sticky;top:26px;z-index:3;background:#f3f2f0;white-space:nowrap;border-bottom:2px solid var(--line)}
+table.t-mo thead th.f-ref{text-align:left;position:sticky;left:0;z-index:5;background:#fafaf8;min-width:90px;max-width:90px}
+table.t-mo thead th.f-nm {text-align:left;position:sticky;left:90px;z-index:5;background:#fafaf8;min-width:150px;max-width:150px}
+table.t-mo thead th.f-st {text-align:left;position:sticky;left:240px;z-index:5;background:#fafaf8;min-width:90px;max-width:90px;border-right:2px solid var(--line)}
+table.t-mo tbody td{text-align:center;padding:5px 6px;white-space:nowrap}
+table.t-mo tbody td.f-ref{text-align:left;position:sticky;left:0;z-index:1;background:var(--card);font-size:10px;color:var(--t3);min-width:90px;max-width:90px}
+table.t-mo tbody td.f-nm {text-align:left;position:sticky;left:90px;z-index:1;background:var(--card);min-width:150px;max-width:150px}
+table.t-mo tbody td.f-st {text-align:left;position:sticky;left:240px;z-index:1;background:var(--card);color:var(--t2);min-width:90px;max-width:90px;border-right:2px solid var(--line2)}
+table.t-mo tbody tr:hover td{background:#fafaf9}
+table.t-mo tbody tr:hover td.f-ref,table.t-mo tbody tr:hover td.f-nm,table.t-mo tbody tr:hover td.f-st{background:#fafaf9}
+table.t-mo tbody tr.sel td{background:#eeedfb}
+table.t-mo tbody tr.sel td.f-ref,table.t-mo tbody tr.sel td.f-nm,table.t-mo tbody tr.sel td.f-st{background:#eeedfb}
+table.t-mo tfoot td{position:sticky;bottom:0;z-index:2;padding:5px 6px;font-weight:700;font-size:11px;border-top:2px solid var(--line);background:#fafaf8;text-align:center;white-space:nowrap}
+table.t-mo tfoot td.f-ref{position:sticky;left:0;z-index:3;background:#fafaf8;text-align:left}
+table.t-mo tfoot td.f-nm {position:sticky;left:90px;z-index:3;background:#fafaf8}
+table.t-mo tfoot td.f-st {position:sticky;left:240px;z-index:3;background:#fafaf8;border-right:2px solid var(--line)}
+.h0{color:var(--line2)}.h1{background:#eaf6f1;color:#0d6e50}
+.h2{background:#c0e9d8;color:#0a5540;font-weight:600}.h3{background:#6fcfae;color:#04362a;font-weight:700}
+.h4{background:#219a6e;color:#fff;font-weight:700}
+/* PILLS */
+.pill{display:inline-flex;align-items:center;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500;white-space:nowrap}
+.p-g{background:#e2f5ee;color:#0b7a58}.p-r{background:#fde8e8;color:#b83232}
+.p-y{background:#fdf4e3;color:#a05208}
+.cat-4u{background:#ebe9fd;color:var(--purple);font-size:9px;font-weight:700;padding:2px 7px;border-radius:8px;text-transform:uppercase;letter-spacing:.4px;display:inline-block}
+.cat-2u{background:#e0f2ee;color:var(--green);font-size:9px;font-weight:700;padding:2px 7px;border-radius:8px;text-transform:uppercase;letter-spacing:.4px;display:inline-block}
+.chip{font-size:9px;padding:1px 6px;border-radius:8px;background:var(--bg);color:var(--t2);border:1px solid var(--line)}
+.pdots{display:flex;gap:3px;align-items:center}
+.pdot{width:7px;height:7px;border-radius:50%}
+/* WEEK CHART */
+.bars-wrap{display:flex;gap:2px;align-items:flex-end;height:70px;overflow-x:auto;flex-shrink:0}
+.bar-col{display:flex;flex-direction:column;align-items:center;cursor:pointer;flex-shrink:0;min-width:22px}
+.bar-col:hover .bar-stk{opacity:.75}
+.bar-col.sel .bar-stk{outline:2px solid var(--purple);outline-offset:2px;border-radius:2px}
+.bar-stk{width:18px;display:flex;flex-direction:column;border-radius:2px 2px 0 0;overflow:hidden}
+.bar-seg{width:100%}
+.bar-lbl{font-size:8px;color:var(--t3);margin-top:3px;text-align:center;white-space:normal;line-height:1.2}
+.bar-lbl.on{color:var(--purple);font-weight:700}
+.ld{display:flex;align-items:center;gap:4px}
+.ld-dot{width:10px;height:10px;border-radius:2px}
+/* SPLIT */
+.split{display:flex;gap:12px;flex:1;overflow:hidden}
+.split-l{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.split-r{width:370px;flex-shrink:0;border:1px solid var(--line);border-radius:8px;background:var(--card);display:flex;flex-direction:column;overflow:hidden;display:none}
+.split-r.open{display:flex}
+.ph{padding:12px 14px;border-bottom:1px solid var(--line);flex-shrink:0;display:flex;justify-content:space-between;align-items:flex-start}
+.ph h4{font-size:13px;font-weight:700;line-height:1.3}
+.ph .pref{font-size:10px;color:var(--t3);margin-top:2px}
+.pclose{font-size:18px;cursor:pointer;color:var(--t3);line-height:1;flex-shrink:0}
+.pclose:hover{color:var(--t1)}
+.pbody{flex:1;overflow-y:auto;padding:12px 14px}
+/* SLIDE PANEL */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.18);z-index:100;display:none}
+.overlay.open{display:block}
+.panel{position:fixed;right:0;top:0;bottom:0;width:440px;background:var(--card);
+  border-left:1px solid var(--line);z-index:101;display:flex;flex-direction:column;
+  transform:translateX(100%);transition:transform .2s ease}
+.panel.open{transform:translateX(0)}
+.ptabs{display:flex;border-bottom:1px solid var(--line);flex-shrink:0}
+.ptab{padding:7px 14px;font-size:11px;border:none;background:none;cursor:pointer;
+  color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px}
+.ptab:hover{color:var(--t1)}
+.ptab.on{color:var(--purple);border-bottom-color:var(--purple);font-weight:600}
+/* panel rows */
+.psub-hdr{display:flex;align-items:center;gap:7px;margin-bottom:9px;padding-bottom:6px;border-bottom:1px solid var(--line2)}
+.psub-mod{font-size:12px;font-weight:600}.psub-ev{font-size:11px;color:var(--t3);margin-left:auto}
+.prow{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--line2)}
+.prow:last-child{border-bottom:none}
+.pdot2{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.pname{flex:1;font-size:11px}.pev{font-size:11px;font-weight:600;min-width:28px;text-align:right}
+.ppax{font-size:10px;color:var(--t3);min-width:38px;text-align:right}
+.pmiss{font-size:10px;color:#b83232;font-style:italic}
+.put{background:#fde8e8;border-radius:6px;padding:9px 12px;margin-bottom:10px}
+.put-t{font-size:11px;font-weight:600;color:#b83232;margin-bottom:3px}
+.put-s{font-size:11px;color:var(--t2);line-height:1.5}
+.spark{display:flex;align-items:flex-end;gap:2px;height:28px}
+/* event rows */
+.ev-sec-hdr{font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--line2)}
+.ev-row{padding:7px 0;border-bottom:1px solid var(--line2)}
+.ev-row:last-child{border-bottom:none}
+.ev-prog{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+.ev-name{font-size:11px;font-weight:500;line-height:1.4;margin-bottom:4px}
+.ev-meta{display:flex;gap:8px;font-size:10px;color:var(--t3);align-items:center;flex-wrap:wrap}
+.sso-tag{font-size:9px;padding:1px 7px;border-radius:8px;background:#f0eef8;color:var(--purple);font-weight:600;letter-spacing:.2px;white-space:nowrap}
+.att-ok{color:var(--green);font-weight:600}.att-z{color:var(--red);font-weight:600}.att-p{color:var(--amber);font-weight:600}
+.ut-banner{background:#fef2f2;border:1px solid #f5c6c6;border-radius:7px;padding:10px 14px;margin-bottom:10px}
+.ut-banner-t{font-size:12px;font-weight:700;color:var(--red);margin-bottom:3px}
+.ut-banner-s{font-size:11px;color:var(--t2)}
+/* ov grid */
+.ov-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;overflow-y:auto;flex:1}
+.ov-card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;cursor:pointer;transition:border-color .15s}
+.ov-card:hover{border-color:var(--purple)}
+.ov-bar{height:3px;background:var(--line2);border-radius:2px;margin:9px 0 4px}
+.ov-fill{height:3px;border-radius:2px}
+/* state box */
+.state-box{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:12px;color:var(--t3)}
+.state-box .icon{font-size:32px}
+/* date range + program filter */
+.sb-filter{padding:8px 12px 6px;border-top:1px solid var(--line2);flex-shrink:0}
+.sb-filter label{font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px}
+.sb-filter input[type=date]{font-size:11px;padding:4px 6px;border:1px solid var(--line);border-radius:5px;background:var(--card);color:var(--t1);width:100%;margin-bottom:4px;box-sizing:border-box}
+.sb-filter input[type=date]:focus{outline:none;border-color:var(--purple)}
+.filter-apply{margin-top:8px;width:100%;padding:6px;font-size:11px;font-weight:700;background:var(--purple);color:#fff;border:none;border-radius:6px;cursor:pointer;letter-spacing:.2px}
+.filter-apply:hover{opacity:.88}
+.filter-clr{margin-top:4px;width:100%;padding:4px;font-size:10px;background:none;border:1px solid var(--line);border-radius:6px;cursor:pointer;color:var(--t3)}
+.filter-clr:hover{border-color:var(--t2);color:var(--t1)}
+</style>
+</head>
+<body>
+<div class="shell">
+<aside class="sb">
+  <div class="sb-top">
+    <div class="sb-logo">NES Analytics</div>
+    <div class="sb-title">Dashboard</div>
+    <div class="sb-sub" id="sb-upd">Connecting…</div>
+  </div>
+  <div class="sb-filter">
+    <label>Date filter</label>
+    <input type="date" id="drS" value="2026-01-01" oninput="_sd=this.value" title="Start date">
+    <input type="date" id="drE" oninput="_ed=this.value" title="End date">
+
+    <button class="filter-apply" onclick="applyFilter()">Fetch with filter</button>
+    <button class="filter-clr" onclick="clearFilter()">Clear &amp; fetch all</button>
+  </div>
+  <div class="sb-nav">
+    <div class="sb-label">View</div>
+    <button class="sb-btn on" id="navOv" onclick="gOv(this)">
+      <div class="dot" style="background:var(--purple)"></div><span class="lbl">Overview</span>
+    </button>
+    <div class="sb-div"></div>
+    <div class="sb-label">NADI4U</div><div id="nav4u"></div>
+    <div class="sb-div"></div>
+    <div class="sb-label">NADI2U</div><div id="nav2u"></div>
+  </div>
+</aside>
+<main class="main" id="main">
+  <div class="state-box"><div class="icon">⏳</div><p>Loading…</p></div>
+</main>
+</div>
+<div class="overlay" id="ov2" onclick="closePanel()"></div>
+<div class="panel" id="panel">
+  <div class="ph"><div><h4 id="ptitle"></h4><div class="pref" id="pref"></div></div>
+    <span class="pclose" onclick="closePanel()">✕</span></div>
+  <div class="ptabs" id="ptabs"></div>
+  <div class="pbody" id="pb"></div>
+</div>
+
+<script>
+const COL={Entrepreneur:'#4c44b0',LifelongLearning:'#0b7575',Wellbeing:'#0b7a58',Awareness:'#a05208',GovInit:'#1650a0'};
+const fmt=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1).replace(/\.0$/,'')+'k':String(n);
+const fN=n=>(+n).toLocaleString();
+const ce=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const hc=v=>v===0?'h0':v<=5?'h1':v<=20?'h2':v<=99?'h3':'h4';
+let SUBS={},NI=[],STATES=[],curSub=null,curTab='nadi',tRowsAll=[],selWeek=null,selMonth=null,_monthSeq={},_sd='',_ed='';
+
+async function boot(){
+  try{
+    const[rS,rN]=await Promise.all([fetch('/api/subcategories').then(r=>r.json()),fetch('/api/sites').then(r=>r.json())]);
+    if(rN.ok){NI=rN.sites;STATES=[...new Set(NI.map(n=>n[2]))].filter(Boolean).sort();}
+    if(rS.ok) rS.subcategories.forEach(s=>{SUBS[s.id]=s;});
+    buildNav(); gOv(document.getElementById('navOv'));
+    document.getElementById('sb-upd').textContent='Auto-fetching all data…';
+    autoFetchAll();
+  }catch(e){
+    document.getElementById('main').innerHTML=`<div class="state-box"><div class="icon">⚠️</div><p>Backend error: ${e.message}</p><p style="font-size:11px">Run: python app.py</p></div>`;
+  }
+}
+
+// ── AUTO-FETCH QUEUE ──────────────────────────────────────────────────────
+// Fetches all uncached subcategories one-by-one in background (sequential
+// to avoid hammering the DB). Shows live chunk progress in sidebar.
+async function applyFilter(){
+  const upd=document.getElementById('sb-upd');
+  upd.textContent='Clearing cache…';
+  await fetch('/api/cache/invalidate_all',{method:'POST'});
+  Object.values(SUBS).forEach(s=>{s.cached=false;});
+  buildNav();
+  // Force re-fetch ALL active subs (not just uncached) so every sub gets same date range
+  const all=Object.values(SUBS).sort((a,b)=>a.id-b.id);
+  const total=all.length;
+  let done=0;
+  upd.textContent=`Fetching 0/${total} subcategories…`;
+  for(const s of all){
+    await fetchOne(s.id, done, total);
+    done++;
+    upd.textContent=`Fetched ${done}/${total} subcategories…`;
+  }
+  upd.textContent='Done · '+new Date().toLocaleDateString('en-MY');
+}
+
+function clearFilter(){
+  _sd='2026-01-01';_ed='';
+  const ds=document.getElementById('drS'),de=document.getElementById('drE');
+  if(ds)ds.value='2026-01-01';if(de)de.value='';
+  applyFilter();
+}
+
+async function autoFetchAll(){
+  const toFetch=Object.values(SUBS).sort((a,b)=>a.id-b.id).filter(s=>!s.cached);
+  if(!toFetch.length){
+    document.getElementById('sb-upd').textContent='All data loaded · '+new Date().toLocaleDateString('en-MY');
+    return;
+  }
+  const total=toFetch.length;
+  let done=0;
+  document.getElementById('sb-upd').textContent=`Fetching 0/${total} subcategories…`;
+  for(const s of toFetch){
+    await fetchOne(s.id, done, total);
+    done++;
+    document.getElementById('sb-upd').textContent=`Fetched ${done}/${total} subcategories…`;
+  }
+  document.getElementById('sb-upd').textContent='All data loaded · '+new Date().toLocaleDateString('en-MY');
+}
+
+function fetchOne(id, queueDone, queueTotal){
+  return new Promise(async resolve=>{
+    const fb=document.getElementById('fb_'+id);
+    if(fb){fb.className='fetch-btn loading';fb.textContent='⏳ queued…';}
+    // Trigger server-side fetch (read dates fresh from DOM each call)
+    const _sd2=(document.getElementById('drS')||{}).value||'';
+    const _ed2=(document.getElementById('drE')||{}).value||'';
+    const _body={};if(_sd2)_body.start_date=_sd2;if(_ed2)_body.end_date=_ed2;
+    const res=await fetch('/api/fetch/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(_body)});
+    if(!res.ok){if(fb){fb.textContent='⚠ start failed';fb.className='fetch-btn';}resolve();return;}
+    // Poll until done
+    const iv=setInterval(async()=>{
+      const r=await fetch('/api/progress/'+id).then(x=>x.json());
+      const chunkBit=(r.chunks&&r.done_chunks)?` ${r.done_chunks}/${r.chunks} ch`:'';
+      const label=r.status==='running'?`⏳ ${r.pct}%${chunkBit}`
+                 :r.status==='done'?'✓ cached'
+                 :r.status==='error'?`⚠ error`:'…';
+      if(fb){fb.textContent=label;}
+      document.getElementById('sb-upd').textContent=
+        `[${queueDone+1}/${queueTotal}] ${r.mod||'sub'+id} — ${r.msg||''}`;
+      if(r.status==='done'){
+        clearInterval(iv);
+        if(fb){fb.className='fetch-btn ready';}
+        const sd=document.getElementById('sd_'+id);
+        if(sd) sd.style.background='var(--green)';
+        SUBS[id].cached=true;
+        SUBS[id].fetched=new Date().toISOString().slice(0,10);
+        if(curSub===id) loadSubData(id);
+        resolve();
+      } else if(r.status==='error'){
+        clearInterval(iv);
+        if(fb){fb.className='fetch-btn';fb.textContent='⚠ retry';}
+        resolve();  // move to next even on error
+      }
+    },1500);
+  });
+}
+
+function buildNav(){
+  const c4=document.getElementById('nav4u'),c2=document.getElementById('nav2u');
+  c4.innerHTML='';c2.innerHTML='';
+  Object.values(SUBS).sort((a,b)=>a.id-b.id).forEach(s=>{
+    const col=COL[s.mod]||'#555',lbl=s.mod==='LifelongLearning'?'Lifelong Learning':s.mod;
+    const btn=document.createElement('button');
+    btn.className='sb-btn';btn.id='n_'+s.id;
+    btn.innerHTML=`<div class="dot" style="background:${col}"></div><span class="lbl">${lbl}</span><span class="sdot" id="sd_${s.id}" style="background:${s.cached?'var(--green)':'var(--line)'}"></span>`;
+    btn.onclick=()=>gSub(s.id,btn);
+    // Status label (replaces old fetch button — auto-fetch handles everything)
+    const fb=document.createElement('div');
+    fb.className='fetch-btn'+(s.cached?' ready':'');fb.id='fb_'+s.id;
+    fb.textContent=s.cached?'✓ cached':'⏳ queued…';
+    (s.cat==='NADI4U'?c4:c2).appendChild(btn);
+    (s.cat==='NADI4U'?c4:c2).appendChild(fb);
+  });
+}
+
+async function triggerFetch(id){
+  const fb=document.getElementById('fb_'+id);
+  fb.className='fetch-btn loading';fb.textContent='⏳ starting…';
+  const _sd2=(document.getElementById('drS')||{}).value||'';
+  const _ed2=(document.getElementById('drE')||{}).value||'';
+  const _body={};if(_sd2)_body.start_date=_sd2;if(_ed2)_body.end_date=_ed2;
+  await fetch('/api/fetch/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(_body)});
+  const iv=setInterval(async()=>{
+    const r=await fetch('/api/progress/'+id).then(x=>x.json());
+    const chunkInfo=(r.chunks&&r.done_chunks)?` (${r.done_chunks}/${r.chunks} chunks)`:'';
+    fb.textContent=r.status==='running'?`⏳ ${r.pct}% ${r.msg}${chunkInfo}`:r.status==='done'?'✓ cached':r.status==='error'?`⚠ ${r.msg}`:'…';
+    if(r.status==='done'){
+      clearInterval(iv);fb.className='fetch-btn ready';
+      document.getElementById('sd_'+id).style.background='var(--green)';
+      SUBS[id].cached=true;SUBS[id].fetched=new Date().toISOString().slice(0,10);
+      if(curSub===id) loadSubData(id);
+    } else if(r.status==='error'){clearInterval(iv);fb.className='fetch-btn';}
+  },1500);
+}
+
+function gOv(el){
+  curSub=null;
+  document.querySelectorAll('.sb-btn').forEach(b=>b.classList.remove('on'));el.classList.add('on');
+  const cached=Object.values(SUBS).filter(s=>s.cached);
+  document.getElementById('main').innerHTML=`
+    <div class="top-bar">
+      <div class="bc">NES &rsaquo; <span>Overview</span></div>
+      <div class="page-hdr">
+        <div><div class="page-title">NES Reporting Dashboard</div>
+        <div class="page-sub">NADI4U &amp; NADI2U &nbsp;·&nbsp; ${cached.length}/10 subcategories ready &nbsp;·&nbsp; 1,099 NADI</div></div>
+        <div class="page-meta">PostgreSQL · 43.217.146.116<br>${new Date().toLocaleDateString('en-MY')}</div>
+      </div>
+    </div>
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-l">Loaded</div><div class="kpi-v" style="color:var(--purple)">${cached.length}<span style="font-size:14px;font-weight:400;color:var(--t3)">/10</span></div><div class="kpi-s">subcategories cached</div></div>
+      <div class="kpi"><div class="kpi-l">NADI index</div><div class="kpi-v">1,099</div><div class="kpi-s">locked national sites</div></div>
+      <div class="kpi"><div class="kpi-l">Cache TTL</div><div class="kpi-v" style="font-size:14px;font-weight:600">6 hours</div><div class="kpi-s">auto-refresh on expiry</div></div>
+      <div class="kpi"><div class="kpi-l">Source</div><div class="kpi-v" style="font-size:13px;font-weight:600">PostgreSQL</div><div class="kpi-s">nd_event · nd_event_participant</div></div>
+    </div>
+    <div style="padding:4px 24px 8px;flex-shrink:0;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:11px;font-weight:600;color:var(--t2)">Subcategory status</div>
+      <button onclick="refreshStatus()" style="font-size:11px;border:1px solid var(--line);border-radius:6px;padding:4px 10px;background:var(--card);cursor:pointer;color:var(--t2)">↻ refresh</button>
+    </div>
+    <div class="ov-grid" id="ovG" style="padding:4px 24px 14px"></div>`;
+  const g=document.getElementById('ovG');
+  Object.values(SUBS).sort((a,b)=>a.id-b.id).forEach(s=>{
+    const col=COL[s.mod]||'#555',lbl=s.mod==='LifelongLearning'?'Lifelong Learning':s.mod;
+    const c=document.createElement('div');c.className='ov-card';
+    if(s.cached){
+      c.onclick=()=>gSub(s.id,document.getElementById('n_'+s.id));
+      c.innerHTML=`<div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <div><span class="${s.cat==='NADI4U'?'cat-4u':'cat-2u'}">${s.cat}</span><div style="font-size:13px;font-weight:600;margin-top:5px">${lbl}</div></div>
+        <span style="font-size:10px;color:var(--green)">● ready</span></div>
+        <div style="font-size:10px;color:var(--t3)">fetched ${s.fetched||'today'}</div>
+        <div style="font-size:10px;color:var(--purple);margin-top:6px">Click to explore →</div>`;
+    } else {
+      c.innerHTML=`<div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <div><span class="${s.cat==='NADI4U'?'cat-4u':'cat-2u'}">${s.cat}</span><div style="font-size:13px;font-weight:600;margin-top:5px;color:var(--t3)">${lbl}</div></div>
+        <span style="font-size:10px;color:var(--t3)">○ not loaded</span></div>
+        <div style="font-size:11px;color:var(--t3)">⏳ Auto-fetching in background…</div>`;
+    }
+    g.appendChild(c);
+  });
+}
+
+async function refreshStatus(){
+  const r=await fetch('/api/subcategories').then(x=>x.json());
+  if(r.ok){r.subcategories.forEach(s=>{SUBS[s.id]=s;});buildNav();}
+  gOv(document.getElementById('navOv'));
+}
+
+async function gSub(id,btn){
+  curSub=id;selWeek=null;
+  document.querySelectorAll('.sb-btn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');
+  if(!SUBS[id]||!SUBS[id].cached){
+    const _sname=SUBS[id]?(SUBS[id].mod==='LifelongLearning'?'Lifelong Learning':SUBS[id].mod):('sub'+id);
+    document.getElementById('main').innerHTML=`<div class="state-box">
+      <div class="icon">⏳</div>
+      <p><b>${_sname}</b> is queued — fetching automatically in background.</p>
+      <p style="font-size:11px;color:var(--t3)">Watch the sidebar for live progress.</p>
+    </div>`;
+    return;
+  }
+  loadSubData(id);
+}
+
+async function loadSubData(id){
+  document.getElementById('main').innerHTML=`<div class="state-box"><div class="icon">⏳</div><p>Loading data…</p></div>`;
+  const r=await fetch('/api/data/'+id).then(x=>x.json());
+  if(!r.ok){document.getElementById('main').innerHTML=`<div class="state-box"><div class="icon">⚠️</div><p>${r.error}</p></div>`;return;}
+  window._D=r.data;
+  buildShell(id);showTab('nadi');
+}
+
+function buildShell(id){
+  const d=window._D,nd=d.nadi,col=COL[nd.mod]||'#555',lbl=nd.mod==='LifelongLearning'?'Lifelong Learning':nd.mod;
+  const s=SUBS[id]||{};const totZ=d.weekly.zero.length;
+  const aMap={};nd.rows.forEach(([i,e,p,pr])=>aMap[i]={e,p,pr});
+  tRowsAll=NI.map((n,i)=>{
+    const[ref,nm,state]=n,a=aMap[i];
+    const te=a?a.e:0,tp=a?a.p:0,pr=a?a.pr:{};
+    const ap=Object.keys(pr).length;
+    return{i,ref,nm,state,te,tp,pr,ap,tp2:nd.progs.length,st:(te===0||tp===0)?'u':ap<nd.progs.length?'p':'a'};
+  });
+  document.getElementById('main').innerHTML=`
+    <div class="top-bar">
+      <div class="bc">NES &rsaquo; <a onclick="gOv(document.getElementById('navOv'))">Overview</a> &rsaquo; ${nd.cat} &rsaquo; <span>${ce(lbl)}</span></div>
+      <div class="page-hdr">
+        <div><div class="page-title"><span class="${nd.cat==='NADI4U'?'cat-4u':'cat-2u'}">${nd.cat}</span>${ce(lbl)}</div>
+        <div class="page-sub">${nd.progs.map(p=>ce(p)).join(' &nbsp;·&nbsp; ')}</div></div>
+        <div class="page-meta">Live DB &nbsp;·&nbsp; ${d.fetched||'today'}<br>${d.start_date||d.end_date?`${d.start_date||'…'} → ${d.end_date||'…'}`:'All dates'}${d.programs_filter&&d.programs_filter.length?` &nbsp;·&nbsp; ${d.programs_filter.length} prog`:''}</div>
+      </div>
+    </div>
+    <div class="tab-bar">
+      <button class="tab-btn on" id="tN" onclick="showTab('nadi')">NADI Index</button>
+      <button class="tab-btn" id="tM" onclick="showTab('monthly')">Monthly Update</button>
+      <button class="tab-btn" id="tW" onclick="showTab('weekly')">Weekly${totZ?` <span style="background:#fde8e8;color:var(--red);font-size:9px;padding:1px 5px;border-radius:8px;font-weight:600">${totZ}⚠</span>`:''}</button>
+    </div>
+    <div id="tB" style="flex:1;overflow:hidden;display:flex;flex-direction:column"></div>`;
+}
+
+function showTab(t){
+  ['tN','tM','tW'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.className='tab-btn'+(['nadi','monthly','weekly'][i]===t?' on':'');});
+  const d=window._D;if(!d)return;
+  if(t!=='weekly'){selWeek=null;selMonth=null;}
+  if(t==='nadi')renderNadi(d);
+  else if(t==='monthly')renderMonthly(d);
+  else renderWeekly(d);
+}
+
+/* ── NADI INDEX ── */
+function renderNadi(d){
+  const nd=d.nadi,col=COL[nd.mod]||'#555';
+  document.getElementById('tB').innerHTML=`
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-l">Events</div><div class="kpi-v" style="color:${col}">${fN(nd.e)}</div><div class="kpi-s">${nd.progs.length} programs</div></div>
+      <div class="kpi"><div class="kpi-l">Pax</div><div class="kpi-v">${fN(nd.p)}</div><div class="kpi-s">registrations</div></div>
+      <div class="kpi"><div class="kpi-l">Active NADI</div><div class="kpi-v" style="color:var(--green)">${nd.a}</div><div class="kpi-s">${Math.round(nd.a/1099*100)}% of 1,099</div></div>
+      <div class="kpi"><div class="kpi-l">Untouched</div><div class="kpi-v" style="color:var(--red)">${nd.u}</div><div class="kpi-s">0 events</div></div>
+    </div>
+    <div class="content">
+      <div class="toolbar">
+        <input id="nq" placeholder="Search NADI name or ref ID…" oninput="fN2()">
+        <select id="nst" onchange="fN2()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
+        <select id="nsf" onchange="fN2()"><option value="">All status</option><option value="a">Active</option><option value="p">Partial</option><option value="u">Untouched</option></select>
+        <span class="fc" id="nfc"></span>
+      </div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th style="width:28px">#</th><th>NADI site</th><th>State</th><th>Status</th><th>Events</th><th>Pax</th><th>Programs</th>
+      </tr></thead><tbody id="nTb"></tbody></table></div>
+    </div>`;fN2();
+}
+function fN2(){
+  const d=window._D;if(!d)return;
+  const nd=d.nadi,col=COL[nd.mod]||'#555';
+  const q=(document.getElementById('nq')||{value:''}).value.toLowerCase();
+  const st=(document.getElementById('nst')||{value:''}).value;
+  const sf=(document.getElementById('nsf')||{value:''}).value;
+  const f=tRowsAll.filter(r=>{
+    if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
+    if(st&&r.state!==st)return false;if(sf&&r.st!==sf)return false;return true;
+  });
+  document.getElementById('nfc').textContent=fN(f.length)+' sites';
+  document.getElementById('nTb').innerHTML=f.map((r,i)=>{
+    const sp=r.st==='u'?`<span class="pill p-r">untouched</span>`:r.st==='p'?`<span class="pill p-y">${r.ap}/${r.tp2}</span>`:`<span class="pill p-g">active</span>`;
+    const dots=nd.progs.map((_,k)=>`<div class="pdot" style="background:${r.pr[String(k)]?col:'var(--line)'}"></div>`).join('');
+    return `<tr onclick="openPanel(${r.i})" id="ri${r.i}">
+      <td style="color:var(--t3);font-size:10px">${i+1}</td>
+      <td><div style="font-weight:${r.te?600:400};color:${r.te?'var(--t1)':'var(--t3)'}">${ce(r.nm)}</div><div style="font-size:10px;color:var(--t3)">${r.ref}</div></td>
+      <td style="font-size:11px;color:var(--t2)">${ce(r.state)}</td><td>${sp}</td>
+      <td style="font-weight:${r.te?600:400}">${r.te?fN(r.te):'—'}</td>
+      <td style="color:var(--t2)">${r.tp?fN(r.tp):'—'}</td>
+      <td><div class="pdots">${dots}</div></td></tr>`;
+  }).join('');
+}
+
+/* ── MONTHLY (program × NADI table with events+pax per program) ── */
+function renderMonthly(d){
+  const nd=d.nadi, sm=d.monthly, col=COL[nd.mod]||'#555';
+  const months=sm.months||[], progs=sm.progs||nd.progs||[];
+  const nm=months.length, np=progs.length;
+  const PROG_COLORS=['#4c44b0','#0b7575','#0b7a58','#a05208','#1650a0','#7a0b5a','#5a7a0b','#0b3d7a'];
+  const mH=m=>{const[mn,yr]=m.split(' ');return mn+"'"+yr.slice(2);};
+
+  // row format: [i, tot_ev[], tot_pax[], {pk:{ev:[],px:[]}}]
+  const aMap={};
+  (sm.rows||[]).forEach(([i,tot,pax,pr])=>{
+    aMap[i]={tot:Array.isArray(tot)?tot:[], pax:Array.isArray(pax)?pax:[], pr:(pr&&typeof pr==='object')?pr:{}};
+  });
+
+  const mTot=months.map((_,mi)=>(sm.rows||[]).reduce((s,r)=>s+((Array.isArray(r[1])?r[1][mi]:0)||0),0));
+  const maxT=Math.max(...mTot,1);
+
+  window._mAMap=aMap; window._mProgs=progs; window._mMonths=months;
+  window._mCol=col; window._mMH=mH; window._mProgColors=PROG_COLORS;
+
+  // Row 1: program names spanning 2 cols each
+  const hdr1=progs.map((p,pi)=>{
+    const pc=PROG_COLORS[pi%PROG_COLORS.length];
+    return `<th colspan="2" style="text-align:center;padding:5px 6px;font-size:9px;font-weight:700;color:${pc};border-left:1px solid var(--line2);white-space:nowrap" title="${ce(p)}">${ce(p.length>14?p.slice(0,13)+'…':p)}</th>`;
+  }).join('');
+  // Row 2: Ev/Pax sub-headers per program + Total Ev/Pax
+  const hdr2=progs.map((_,pi)=>
+    `<th style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3);border-left:1px solid var(--line2)">Ev</th>`+
+    `<th style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3)">Pax</th>`
+  ).join('');
+
+  const sumBars=mTot.map((v,i)=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px" title="${months[i]}: ${fN(v)} events">
+      <div style="width:100%;height:${v>0?Math.max(3,Math.round(v/maxT*38)):2}px;background:${v>0?col:'#e8e6e3'};border-radius:2px 2px 0 0;align-self:flex-end"></div>
+      <span style="font-size:7px;color:var(--t3);text-align:center;overflow:hidden;white-space:nowrap;width:100%">${mH(months[i])}</span>
+    </div>`).join('');
+
+  document.getElementById('tB').innerHTML=`
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-l">Period</div><div class="kpi-v" style="font-size:14px;font-weight:600">${months[0]||'—'}</div><div class="kpi-s">to ${months[months.length-1]||'—'}</div></div>
+      <div class="kpi"><div class="kpi-l">Months</div><div class="kpi-v" style="color:${col}">${nm}</div><div class="kpi-s">reporting periods</div></div>
+      <div class="kpi"><div class="kpi-l">Programs</div><div class="kpi-v" style="color:${col}">${np}</div><div class="kpi-s">in this subcategory</div></div>
+      <div class="kpi"><div class="kpi-l">Active NADI</div><div class="kpi-v" style="color:var(--green)">${nd.a}</div><div class="kpi-s">of 1,099</div></div>
+    </div>
+    <div style="padding:0 24px 8px;flex-shrink:0">
+      <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:700">Events by month (all programs)</div>
+      <div style="display:flex;align-items:flex-end;gap:3px;height:52px">${sumBars}</div>
+    </div>
+    <div style="display:flex;gap:8px;font-size:10px;color:var(--t3);align-items:center;flex-shrink:0;padding:2px 24px 6px">
+      Heat (events):&nbsp;
+      <span style="width:14px;height:8px;border-radius:2px;background:#e6e4e1;display:inline-block"></span>0&nbsp;
+      <span style="width:14px;height:8px;border-radius:2px;background:#eaf6f1;display:inline-block"></span>1–5&nbsp;
+      <span style="width:14px;height:8px;border-radius:2px;background:#c0e9d8;display:inline-block"></span>6–20&nbsp;
+      <span style="width:14px;height:8px;border-radius:2px;background:#219a6e;display:inline-block"></span>21+&nbsp;
+      <span style="margin-left:8px;font-style:italic">Click a row → monthly chart</span>
+    </div>
+    <div class="content" style="padding-top:0">
+      <div class="toolbar">
+        <input id="mq" placeholder="Search NADI name or ref…" oninput="fM()">
+        <select id="mst" onchange="fM()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
+        <select id="msf" onchange="fM()"><option value="">All NADI</option><option value="a">Active only</option><option value="u">Untouched only</option></select>
+        <span class="fc" id="mfc"></span>
+      </div>
+      <div class="tbl-wrap">
+        <table class="t-mo" id="mTable">
+          <thead>
+            <tr>
+              <th class="f-ref" rowspan="2" style="vertical-align:bottom;border-bottom:2px solid var(--line)">Ref ID</th>
+              <th class="f-nm"  rowspan="2" style="vertical-align:bottom;border-bottom:2px solid var(--line)">NADI site</th>
+              <th class="f-st"  rowspan="2" style="vertical-align:bottom;border-bottom:2px solid var(--line)">State</th>
+              ${hdr1}
+              <th colspan="2" style="text-align:center;padding:5px 6px;font-size:10px;font-weight:700;border-left:2px solid var(--line);white-space:nowrap">Total</th>
+            </tr>
+            <tr>
+              ${hdr2}
+              <th style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3);border-left:2px solid var(--line)">Ev</th>
+              <th style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3)">Pax</th>
+            </tr>
+          </thead>
+          <tbody id="mTb"></tbody>
+          <tfoot><tr id="mFoot"></tr></tfoot>
+        </table>
+      </div>
+    </div>`;
+
+  // Footer stubs — 3 sticky label cells + 2 tds per program + 2 for grand total
+  const foot=document.getElementById('mFoot');
+  [['f-ref','Total'],['f-nm',''],['f-st','']].forEach(([cls,lbl])=>{
+    const td=document.createElement('td');td.className=cls;td.textContent=lbl;
+    td.style.cssText='font-size:10px;color:var(--t3);font-weight:600;text-transform:uppercase;';
+    foot.appendChild(td);
+  });
+  progs.forEach((_,pi)=>{
+    const pc=PROG_COLORS[pi%PROG_COLORS.length];
+    const te=document.createElement('td');te.id='mft_pe'+pi;
+    te.style.cssText='text-align:center;font-size:10px;font-weight:600;color:'+pc+';border-left:1px solid var(--line2);';
+    foot.appendChild(te);
+    const tp=document.createElement('td');tp.id='mft_pp'+pi;
+    tp.style.cssText='text-align:center;font-size:10px;color:var(--t2);';
+    foot.appendChild(tp);
+  });
+  ['mft_gev','mft_gpx'].forEach((id,j)=>{
+    const td=document.createElement('td');td.id=id;
+    td.style.cssText='text-align:center;font-weight:700;color:'+(j?'var(--t2)':col)+';border-left:'+(j?'none':'2px solid var(--line)')+';';
+    foot.appendChild(td);
+  });
+  fM();
+}
+
+function fM(){
+  const d=window._D;if(!d)return;
+  const nd=d.nadi, sm=d.monthly;
+  const progs=sm.progs||nd.progs||[];
+  const np=progs.length, col=window._mCol||COL[nd.mod]||'#555';
+  const aMap=window._mAMap||{};
+  const PROG_COLORS=window._mProgColors||['#4c44b0','#0b7575','#0b7a58','#a05208','#1650a0'];
+
+  const q=(document.getElementById('mq')||{value:''}).value.toLowerCase();
+  const st=(document.getElementById('mst')||{value:''}).value;
+  const sf=(document.getElementById('msf')||{value:''}).value;
+
+  const f=tRowsAll.filter(r=>{
+    if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
+    if(st&&r.state!==st)return false;
+    if(sf==='a'&&r.st==='u')return false;
+    if(sf==='u'&&r.st!=='u')return false;
+    return true;
+  });
+  document.getElementById('mfc').textContent=fN(f.length)+' sites';
+
+  const footEv=new Array(np).fill(0);
+  const footPx=new Array(np).fill(0);
+  let grandEv=0, grandPx=0;
+
+  document.getElementById('mTb').innerHTML=f.map(r=>{
+    const a=aMap[r.i]||{tot:[],pax:[],pr:{}};
+    const progEv=progs.map((_,pi)=>((a.pr[String(pi)]||{}).ev||[]).reduce((s,v)=>s+(v||0),0));
+    const progPx=progs.map((_,pi)=>((a.pr[String(pi)]||{}).px||[]).reduce((s,v)=>s+(v||0),0));
+    const totEv=progEv.reduce((s,v)=>s+v,0);
+    const totPx=progPx.reduce((s,v)=>s+v,0);
+    grandEv+=totEv; grandPx+=totPx;
+    progEv.forEach((v,pi)=>{footEv[pi]+=v;}); progPx.forEach((v,pi)=>{footPx[pi]+=v;});
+    const cells=progs.map((_,pi)=>
+      `<td class="${hc(progEv[pi])}" style="text-align:center;border-left:1px solid var(--line2);font-weight:${progEv[pi]?600:400}">${progEv[pi]?fN(progEv[pi]):'·'}</td>`+
+      `<td style="text-align:center;color:var(--t2);font-size:10px">${progPx[pi]?fN(progPx[pi]):'·'}</td>`
+    ).join('');
+    return `<tr onclick="openMoPanel(${r.i})" id="mi${r.i}" style="cursor:pointer">
+      <td class="f-ref">${ce(r.ref)}</td>
+      <td class="f-nm" title="${ce(r.nm)}"><div style="font-weight:${totEv?600:400};color:${totEv?'var(--t1)':'var(--t3)'};font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:145px">${ce(r.nm)}</div></td>
+      <td class="f-st">${ce(r.state)}</td>
+      ${cells}
+      <td style="text-align:center;font-weight:${totEv?700:400};color:${totEv?col:'var(--t3)'};border-left:2px solid var(--line)">${totEv?fN(totEv):'—'}</td>
+      <td style="text-align:center;color:var(--t2);font-weight:${totPx?600:400}">${totPx?fN(totPx):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  progs.forEach((_,pi)=>{
+    const ee=document.getElementById('mft_pe'+pi);if(ee)ee.textContent=footEv[pi]?fN(footEv[pi]):'—';
+    const ep=document.getElementById('mft_pp'+pi);if(ep)ep.textContent=footPx[pi]?fN(footPx[pi]):'—';
+  });
+  const ge=document.getElementById('mft_gev');if(ge)ge.textContent=grandEv?fN(grandEv):'—';
+  const gp=document.getElementById('mft_gpx');if(gp)gp.textContent=grandPx?fN(grandPx):'—';
+}
+
+function openMoPanel(nadi_idx){
+  const d=window._D;if(!d)return;
+  const aMap=window._mAMap||{}, months=window._mMonths||[], progs=window._mProgs||[];
+  const col=window._mCol||'#555', PROG_COLORS=window._mProgColors||['#4c44b0','#0b7575','#0b7a58','#a05208','#1650a0'];
+  const mH=window._mMH||(m=>{const[mn,yr]=m.split(' ');return mn+"'"+yr.slice(2);});
+  const ni=NI[nadi_idx]||[], [ref,nm2,state]=ni;
+  const a=aMap[nadi_idx]||{tot:[],pax:[],pr:{}}, tot=a.tot||[], px=a.pax||[];
+  const maxV=Math.max(...tot,1);
+
+  const bars=months.map((m,mi)=>{
+    const v=tot[mi]||0, p=px[mi]||0, h=v>0?Math.max(4,Math.round(v/maxV*80)):2;
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px" title="${m}: ${fN(v)} events · ${fN(p)} pax">
+      <div style="font-size:8px;color:var(--t2);font-weight:${v?600:400};text-align:center">${v||''}</div>
+      <div style="flex:1;display:flex;align-items:flex-end;width:100%">
+        <div style="width:100%;height:${h}px;background:${v?col:'#e8e6e3'};border-radius:2px 2px 0 0"></div>
+      </div>
+      <span style="font-size:7px;color:var(--t3);white-space:nowrap">${mH(m)}</span>
+    </div>`;
+  }).join('');
+
+  const progRows=progs.map((p,pi)=>{
+    const pc=PROG_COLORS[pi%PROG_COLORS.length];
+    const pr=a.pr[String(pi)]||{ev:[],px:[]};
+    const evTot=(pr.ev||[]).reduce((s,v)=>s+(v||0),0);
+    const pxTot=(pr.px||[]).reduce((s,v)=>s+(v||0),0);
+    return `<tr>
+      <td style="font-size:11px;padding:4px 0;color:${pc};font-weight:600">${ce(p)}</td>
+      <td style="text-align:right;font-size:11px;padding:4px 4px;font-weight:${evTot?700:400};color:${evTot?pc:'var(--t3)'}" title="events">${evTot?fN(evTot):'—'}</td>
+      <td style="text-align:right;font-size:11px;padding:4px 8px;color:var(--t2)" title="pax">${pxTot?fN(pxTot):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('ptitle').textContent=nm2||ref;
+  document.getElementById('pref').textContent=(state||'')+' · '+ref;
+  document.getElementById('ptabs').innerHTML='';
+  document.getElementById('pb').innerHTML=`
+    <div style="margin-bottom:16px">
+      <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Events by month (all programs)</div>
+      <div style="display:flex;align-items:flex-end;gap:3px;height:108px">${bars}</div>
+    </div>
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">By program (total)</div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr>
+          <th style="text-align:left;font-size:9px;color:var(--t3);padding:2px 0;font-weight:400">Program</th>
+          <th style="text-align:right;font-size:9px;color:var(--t3);padding:2px 4px;font-weight:400">Events</th>
+          <th style="text-align:right;font-size:9px;color:var(--t3);padding:2px 8px;font-weight:400">Pax</th>
+        </tr></thead>
+        <tbody>${progRows}</tbody>
+      </table>
+    </div>`;
+  document.getElementById('panel').classList.add('open');
+  document.getElementById('ov2').classList.add('open');
+}
+
+
+/* ── WEEKLY ── */
+function renderWeekly(d){
+  const wk=d.weekly,nd=d.nadi,col=COL[nd.mod]||'#555';
+  const weeks=wk.weeks;
+  const totEv=weeks.reduce((s,w)=>s+w.ev,0);
+  const totZ=weeks.reduce((s,w)=>s+w.z,0);
+  const totP=weeks.reduce((s,w)=>s+w.p,0);
+  const totC=weeks.reduce((s,w)=>s+w.c,0);
+  const maxEv=Math.max(...weeks.map(w=>w.ev),1);
+  const activeRefs=new Set(wk.active_refs);
+  const ut=NI.filter(n=>!activeRefs.has(n[0]));
+  document.getElementById('tB').innerHTML=`
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-l">Total events</div><div class="kpi-v" style="color:${col}">${fN(totEv)}</div><div class="kpi-s">${weeks.length} weeks</div></div>
+      <div class="kpi"><div class="kpi-l">Zero attended</div><div class="kpi-v" style="color:var(--red)">${fN(totZ)}</div><div class="kpi-s">${totEv?Math.round(totZ/totEv*100):0}%</div></div>
+      <div class="kpi"><div class="kpi-l">Partial</div><div class="kpi-v" style="color:var(--amber)">${fN(totP)}</div><div class="kpi-s">${totEv?Math.round(totP/totEv*100):0}%</div></div>
+      <div class="kpi"><div class="kpi-l">Complete</div><div class="kpi-v" style="color:var(--green)">${fN(totC)}</div><div class="kpi-s">${totEv?Math.round(totC/totEv*100):0}%</div></div>
+    </div>
+    <div class="content">
+      <div style="display:flex;gap:0;border-bottom:1px solid var(--line2);margin-bottom:8px;flex-shrink:0">
+        <button class="tab-btn on" id="wt1" style="padding:6px 12px;font-size:11px" onclick="wTab('byWeek')">By week</button>
+        <button class="tab-btn" id="wt2" style="padding:6px 12px;font-size:11px" onclick="wTab('byNadi')">By NADI</button>
+        <button class="tab-btn" id="wt3" style="padding:6px 12px;font-size:11px" onclick="wTab('byEvent')">⚠ 0 attended (${wk.zero.length})</button>
+      </div>
+      <div style="flex-shrink:0;margin-bottom:8px">
+        <div style="display:flex;gap:12px;font-size:11px;color:var(--t2);margin-bottom:5px">
+          <div class="ld"><div class="ld-dot" style="background:var(--rc)"></div>Zero</div>
+          <div class="ld"><div class="ld-dot" style="background:var(--pc)"></div>Partial</div>
+          <div class="ld"><div class="ld-dot" style="background:var(--cc)"></div>Complete</div>
+        </div>
+        <div class="bars-wrap" id="wBars"></div>
+      </div>
+      <div id="wTC" style="flex:1;overflow:hidden;display:flex;flex-direction:column"></div>
+      ${ut.length?`<div style="flex-shrink:0;margin-top:6px">
+        <div style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:9px 14px;background:#fef2f2;border:1px solid #f5c6c6;border-radius:8px" onclick="tUT(this)">
+          <span style="font-size:12px;font-weight:700;color:var(--red)">⚠ ${ut.length} Untouched NADI</span>
+          <span style="font-size:11px;color:#a00">— 0 events in this subcategory</span>
+          <span id="utTog" style="font-size:11px;color:var(--purple);margin-left:auto">show ▼</span>
+        </div>
+        <div id="utList" style="display:none;border:1px solid #f5c6c6;border-top:none;border-radius:0 0 8px 8px;background:#fff8f8;max-height:200px;overflow-y:auto">
+          <div style="display:grid;grid-template-columns:1fr 1fr">
+            ${ut.map(n=>`<div style="padding:5px 12px;border-bottom:1px solid #fde8e8;font-size:11px;display:flex;justify-content:space-between;align-items:center">
+              <div><div style="font-weight:500">${ce(n[1])}</div><div style="font-size:10px;color:var(--t3)">${n[2]}</div></div>
+              <span style="font-size:9px;font-family:monospace;color:var(--t3)">${n[0]}</span>
+            </div>`).join('')}
+          </div>
+        </div>
+      </div>`:''}
+    </div>`;
+  drawBars(weeks,maxEv,col);wTab('byWeek');
+}
+
+function tUT(el){const l=document.getElementById('utList'),t=document.getElementById('utTog');if(l.style.display==='none'){l.style.display='block';t.textContent='hide ▲';}else{l.style.display='none';t.textContent='show ▼';}}
+
+// Convert "W%V YYYY" + date string → "W1\nJan" style label
+// Groups bars by month, marks W1-W4 within each month
+function buildMonthSeq(weeks){
+  _monthSeq={};
+  const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  weeks.forEach(w=>{
+    if(!w.ws)return;
+    const d=new Date(w.ws);
+    const mk=d.getFullYear()*100+(d.getMonth()+1);
+    if(!_monthSeq[mk]){
+      _monthSeq[mk]={label:MONTHS[d.getMonth()]+" '"+String(d.getFullYear()).slice(2),wks:[]};
+    }
+    _monthSeq[mk].wks.push(w.k);
+  });
+}
+
+function wkOfMonth(wk){
+  for(const mk of Object.keys(_monthSeq)){
+    const idx=_monthSeq[mk].wks.indexOf(wk);
+    if(idx>=0)return idx+1;
+  }
+  return 1;
+}
+
+function mkOfWeek(wk){
+  for(const mk of Object.keys(_monthSeq)){
+    if(_monthSeq[mk].wks.includes(wk))return mk;
+  }
+  return null;
+}
+
+function drawBars(weeks,maxEv,col){
+  const wrap=document.getElementById('wBars');if(!wrap)return;wrap.innerHTML='';
+  buildMonthSeq(weeks);
+  const BAR_W=20,BAR_GAP=2;
+
+  // Month bracket row
+  const mRow=document.createElement('div');
+  mRow.style.cssText='display:flex;gap:0;margin-bottom:4px;';
+  Object.entries(_monthSeq).forEach(([mk,info])=>{
+    const n=info.wks.length;
+    const spanW=n*(BAR_W+BAR_GAP)-BAR_GAP;
+    const mBtn=document.createElement('div');
+    mBtn.id='mb_'+mk;
+    mBtn.dataset.mk=mk;
+    mBtn.style.cssText='width:'+spanW+'px;min-width:'+spanW+'px;margin-right:'+BAR_GAP+'px;'+
+      'display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;'+
+      'letter-spacing:.3px;cursor:pointer;border-radius:4px;padding:2px 0;'+
+      'color:var(--t3);border:1px solid transparent;transition:all .12s;'+
+      'white-space:nowrap;overflow:hidden;user-select:none;box-sizing:border-box;';
+    mBtn.title='Click to filter '+info.label;
+    mBtn.textContent=info.label;
+    mBtn.onclick=function(e){e.stopPropagation();onMonthClick(mk,mBtn);};
+    mRow.appendChild(mBtn);
+  });
+
+  // Bar row
+  const bRow=document.createElement('div');
+  bRow.style.cssText='display:flex;gap:2px;align-items:flex-end;height:70px;';
+  weeks.forEach(w=>{
+    const h=Math.max(w.ev>0?4:0,Math.round(w.ev/maxEv*64));
+    const zH=Math.max(w.z>0?2:0,Math.round(w.z/Math.max(w.ev,1)*h));
+    const pH=Math.round(w.p/Math.max(w.ev,1)*h),cH=Math.max(0,h-zH-pH);
+    const wi=wkOfMonth(w.k);
+    const bc=document.createElement('div');
+    bc.className='bar-col';bc.id='bc_'+w.k.replace(/ /g,'_');
+    bc.title=w.l+'\n'+w.ev+' ev · Zero:'+w.z+' Partial:'+w.p+' Complete:'+w.c;
+    bc.innerHTML='<div class="bar-stk" style="height:'+h+'px">'+
+      '<div class="bar-seg" style="flex:'+cH+';background:var(--cc);min-height:'+(cH>0?1:0)+'px"></div>'+
+      '<div class="bar-seg" style="flex:'+pH+';background:var(--pc);min-height:'+(pH>0?1:0)+'px"></div>'+
+      '<div class="bar-seg" style="flex:'+zH+';background:var(--rc);min-height:'+(zH>0?2:0)+'px"></div>'+
+      '</div><div class="bar-lbl" id="bl_'+w.k.replace(/ /g,'_')+'">'+(function(){const mk=mkOfWeek(w.k);return mk&&_monthSeq[mk]?_monthSeq[mk].label.split(' ')[0]+'<br>':'';})()+'W'+wi+'</div>';
+    bc.onclick=function(){onWBar(w.k,bc);};
+    bRow.appendChild(bc);
+  });
+
+  const outer=document.createElement('div');
+  outer.style.cssText='display:flex;flex-direction:column;min-width:max-content;';
+  outer.appendChild(mRow);
+  outer.appendChild(bRow);
+  wrap.appendChild(outer);
+}
+
+function clearBarSel(){
+  document.querySelectorAll('.bar-col').forEach(b=>b.classList.remove('sel'));
+  document.querySelectorAll('.bar-lbl').forEach(l=>l.classList.remove('on'));
+  document.querySelectorAll('[id^="mb_"]').forEach(m=>{
+    m.style.background='';m.style.color='var(--t3)';m.style.borderColor='transparent';
+  });
+}
+
+function highlightMonth(mk){
+  const info=_monthSeq[mk];if(!info)return;
+  const mBtn=document.getElementById('mb_'+mk);
+  if(mBtn){mBtn.style.background='#ebe9fd';mBtn.style.color='var(--purple)';mBtn.style.borderColor='var(--purple)';}
+  info.wks.forEach(function(wk){
+    const bc=document.getElementById('bc_'+wk.replace(/ /g,'_'));
+    if(bc)bc.classList.add('sel');
+  });
+}
+
+function highlightWeek(wk){
+  const mk=mkOfWeek(wk);
+  if(mk){
+    const mBtn=document.getElementById('mb_'+mk);
+    if(mBtn){mBtn.style.background='#f3f2ff';mBtn.style.color='var(--purple)';mBtn.style.borderColor='#c5c0f0';}
+  }
+  const bc=document.getElementById('bc_'+wk.replace(/ /g,'_'));
+  if(bc){bc.classList.add('sel');const lbl=document.getElementById('bl_'+wk.replace(/ /g,'_'));if(lbl)lbl.classList.add('on');}
+}
+
+function onWBar(wk,el){
+  if(selWeek===wk&&!selMonth){selWeek=null;clearBarSel();refreshWkTab();return;}
+  selWeek=wk;selMonth=null;clearBarSel();highlightWeek(wk);refreshWkTab();
+}
+
+function onMonthClick(mk,el){
+  if(selMonth===mk&&!selWeek){selMonth=null;clearBarSel();refreshWkTab();return;}
+  selMonth=mk;selWeek=null;clearBarSel();highlightMonth(mk);refreshWkTab();
+}
+
+function refreshWkTab(){
+  const active=['wt1','wt2','wt3'].find(id=>{const e=document.getElementById(id);return e&&e.classList.contains('on');});
+  wTab(active==='wt2'?'byNadi':active==='wt3'?'byEvent':'byWeek');
+}
+
+
+function wTab(t){
+  ['wt1','wt2','wt3'].forEach((id,i)=>{const el=document.getElementById(id);if(el){el.className='tab-btn'+(['byWeek','byNadi','byEvent'][i]===t?' on':'');el.style.cssText='padding:6px 12px;font-size:11px';}});
+  const d=window._D;if(!d)return;
+  if(t==='byWeek')rWkByWeek(d.weekly,d.nadi);
+  else if(t==='byNadi')rWkByNadi(d.weekly,d.nadi);
+  else rWkByEvent(d.weekly,d.nadi);
+  if(selWeek)highlightWeek(selWeek);
+  else if(selMonth)highlightMonth(selMonth);
+}
+
+/* weekly > by week */
+function rWkByWeek(wk,nd){
+  const col=COL[nd.mod]||'#555';
+  document.getElementById('wTC').innerHTML=`
+    <div class="split">
+      <div class="split-l">
+        <div class="toolbar" style="flex-shrink:0">
+          <input id="wkq" placeholder="Search NADI…" oninput="fWkN()">
+          <select id="wkst" onchange="fWkN()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
+          <select id="wkpr" onchange="fWkN()"><option value="">All programs</option>${[...new Set(Object.values(wk.nw).flatMap(refs=>Object.values(refs).flat().map(e=>e.pr)).filter(Boolean))].sort().map(p=>`<option value="${ce(p)}">${ce(p)}</option>`).join('')}</select>
+          <select id="wksf" onchange="fWkN()"><option value="">All</option><option value="z">Has zero</option><option value="c">All complete</option></select>
+          <span class="fc" id="wkfc"></span>
+        </div>
+        <div class="tbl-wrap"><table><thead><tr>
+          <th style="width:26px">#</th><th>NADI site</th><th>State</th><th>Ev.</th><th>Zero</th><th>Part.</th><th>Compl.</th>
+        </tr></thead><tbody id="wkNTb"></tbody></table></div>
+      </div>
+      <div class="split-r" id="wkPR">
+        <div class="ph"><div><h4 id="wkPT"></h4><div class="pref" id="wkPRf"></div></div>
+          <span class="pclose" onclick="cWkP()">✕</span></div>
+        <div class="pbody" id="wkPB"></div>
+      </div>
+    </div>`;fWkN();
+}
+function fWkN(){
+  const d=window._D;if(!d)return;const wk=d.weekly,col=COL[d.nadi.mod]||'#555';
+  let nw;
+  if(selWeek){nw=wk.nw[selWeek]||{};}
+  else if(selMonth){const mWks=(_monthSeq[selMonth]||{}).wks||[];
+    nw=mWks.reduce((acc,wkk)=>{Object.entries(wk.nw[wkk]||{}).forEach(([ref,evs])=>{if(!acc[ref])acc[ref]=[];acc[ref].push(...evs);});return acc;},{});}
+  else{nw=Object.entries(wk.nw).reduce((acc,[,refs])=>{Object.entries(refs).forEach(([ref,evs])=>{if(!acc[ref])acc[ref]=[];acc[ref].push(...evs);});return acc;},{});}
+  const q=(document.getElementById('wkq')||{value:''}).value.toLowerCase();
+  const st=(document.getElementById('wkst')||{value:''}).value;
+  const pr=(document.getElementById('wkpr')||{value:''}).value;
+  const sf=(document.getElementById('wksf')||{value:''}).value;
+  let rows=Object.entries(nw).map(([ref,evs])=>{
+    // filter events by program first if selected
+    const fevs=pr?evs.filter(e=>e.pr===pr):evs;
+    if(pr&&!fevs.length) return null;
+    const ni=NI.find(n=>n[0]===ref)||[ref,ref,'—'];
+    const z=fevs.filter(e=>e.st==='z').length,c=fevs.filter(e=>e.st==='c').length,p=fevs.filter(e=>e.st==='p').length;
+    return{ref,nm:ni[1],state:ni[2],evs:fevs,z,c,p,tot:fevs.length};
+  }).filter(r=>{
+    if(!r)return false;
+    if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
+    if(st&&r.state!==st)return false;if(sf==='z'&&r.z===0)return false;if(sf==='c'&&(r.z>0||r.p>0))return false;return true;
+  }).sort((a,b)=>b.z-a.z||a.nm.localeCompare(b.nm));
+  const _ctx=selWeek?' · '+selWeek:selMonth?' · '+((_monthSeq[selMonth]||{}).label||selMonth):'· all weeks';
+  document.getElementById('wkfc').textContent=rows.length+' NADI'+_ctx;
+  document.getElementById('wkNTb').innerHTML=rows.map((r,i)=>`
+    <tr onclick="oWkNP('${r.ref}')" id="wkr_${r.ref.replace(/[^a-z0-9]/gi,'_')}">
+      <td style="color:var(--t3);font-size:10px">${i+1}</td>
+      <td><div style="font-weight:600">${ce(r.nm)}</div><div style="font-size:10px;color:var(--t3)">${r.ref}</div></td>
+      <td style="font-size:11px;color:var(--t2)">${ce(r.state)}</td>
+      <td>${r.tot}</td><td>${r.z?`<b style="color:var(--red)">${r.z}</b>`:'—'}</td>
+      <td>${r.p?`<span style="color:var(--amber)">${r.p}</span>`:'—'}</td>
+      <td>${r.c?`<span style="color:var(--green)">${r.c}</span>`:'—'}</td>
+    </tr>`).join('');
+}
+function oWkNP(ref){
+  const d=window._D;if(!d)return;const wk=d.weekly,col=COL[d.nadi.mod]||'#555';
+  const ni=NI.find(n=>n[0]===ref)||[ref,ref,'—'];
+  document.querySelectorAll('#wkNTb tr').forEach(r=>r.classList.remove('sel'));
+  const el=document.getElementById('wkr_'+ref.replace(/[^a-z0-9]/gi,'_'));if(el)el.classList.add('sel');
+  const evs=selWeek?(wk.nw[selWeek]||{})[ref]||[]:Object.values(wk.nw).flatMap(refs=>refs[ref]||[]);
+  const zEvs=evs.filter(e=>e.st==='z'),pEvs=evs.filter(e=>e.st==='p'),cEvs=evs.filter(e=>e.st==='c');
+  document.getElementById('wkPT').textContent=ni[1];
+  document.getElementById('wkPRf').textContent=`${ref} · ${ni[2]}${selWeek?' · '+selWeek:''}`;
+  document.getElementById('wkPR').className='split-r open';
+  const eB=(list,label,cls,icon)=>list.length?`<div style="margin-bottom:12px"><div class="ev-sec-hdr">${icon} ${label} (${list.length})</div>
+    ${list.map(e=>`<div class="ev-row"><div class="ev-prog" style="color:${col}">${ce(e.pr)}</div>
+    <div class="ev-name">${ce(e.pn)}</div>
+    <div class="ev-meta"><span class="${cls}">att: ${e.at}/${e.tp}</span><span class="sso-tag">${e.sso}</span></div></div>`).join('')}</div>`:'';
+  document.getElementById('wkPB').innerHTML=
+    (zEvs.length?`<div class="ut-banner"><div class="ut-banner-t">⚠ ${zEvs.length} event${zEvs.length>1?'s':''} with 0 attendance</div><div class="ut-banner-s">SSO must record attendance within 7 days.</div></div>`:'')+
+    eB(zEvs,'Zero attended','att-z','⚠')+eB(pEvs,'Partial','att-p','◑')+eB(cEvs,'Complete','att-ok','✓');
+}
+function cWkP(){document.getElementById('wkPR').className='split-r';document.querySelectorAll('#wkNTb tr').forEach(r=>r.classList.remove('sel'));}
+
+/* weekly > by nadi */
+function rWkByNadi(wk,nd){
+  const col=COL[nd.mod]||'#555';
+  const nadiMap={};
+  Object.entries(wk.nw).forEach(([wkk,refs])=>{Object.entries(refs).forEach(([ref,evs])=>{
+    if(!nadiMap[ref])nadiMap[ref]={z:0,c:0,p:0,tot:0,wks:new Set()};
+    nadiMap[ref].z+=evs.filter(e=>e.st==='z').length;nadiMap[ref].c+=evs.filter(e=>e.st==='c').length;
+    nadiMap[ref].p+=evs.filter(e=>e.st==='p').length;nadiMap[ref].tot+=evs.length;nadiMap[ref].wks.add(wkk);
+  });});
+  const allRows=NI.map(([ref,nm,state])=>{const m=nadiMap[ref];return{ref,nm,state,z:m?m.z:0,c:m?m.c:0,p:m?m.p:0,tot:m?m.tot:0,wks:m?m.wks.size:0,ut:!m};});
+  document.getElementById('wTC').innerHTML=`
+    <div class="split">
+      <div class="split-l">
+        <div class="toolbar" style="flex-shrink:0">
+          <input id="bnq" placeholder="Search NADI…" oninput="fBnN()">
+          <select id="bnst" onchange="fBnN()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
+          <select id="bnpr" onchange="fBnN()"><option value="">All programs</option>${[...new Set(Object.values(wk.nw).flatMap(refs=>Object.values(refs).flat().map(e=>e.pr)).filter(Boolean))].sort().map(p=>`<option value="${ce(p)}">${ce(p)}</option>`).join('')}</select>
+          <select id="bnsf" onchange="fBnN()"><option value="">All status</option><option value="z">Has zero</option><option value="ok">All complete</option><option value="ut">Untouched</option></select>
+          <span class="fc" id="bnfc"></span>
+        </div>
+        <div class="tbl-wrap"><table><thead><tr>
+          <th style="width:26px">#</th><th>NADI site</th><th>State</th><th>Wks</th><th>Total</th><th>Zero</th><th>Part.</th><th>Compl.</th>
+        </tr></thead><tbody id="bnTb"></tbody></table></div>
+      </div>
+      <div class="split-r" id="bnPR">
+        <div class="ph"><div><h4 id="bnPT"></h4><div class="pref" id="bnPRf"></div></div>
+          <span class="pclose" onclick="cBnP()">✕</span></div>
+        <div class="pbody" id="bnPB"></div>
+      </div>
+    </div>`;
+  window._bnRows=allRows;window._bnNw=wk.nw;window._bnWks=wk.weeks;fBnN();
+}
+function fBnN(){
+  const d=window._D;if(!d)return;
+  const wk=d.weekly;
+  const q=(document.getElementById('bnq')||{value:''}).value.toLowerCase();
+  const st=(document.getElementById('bnst')||{value:''}).value;
+  const pr=(document.getElementById('bnpr')||{value:''}).value;
+  const sf=(document.getElementById('bnsf')||{value:''}).value;
+
+  // Rebuild nadiMap fresh — so program filter correctly recounts zeros/completes
+  const nadiMap={};
+  const _bnAllow=selWeek?new Set([selWeek]):selMonth?new Set((_monthSeq[selMonth]||{}).wks||[]):null;
+  Object.entries(wk.nw).forEach(([wkk,refs])=>{
+    if(_bnAllow&&!_bnAllow.has(wkk))return;
+    Object.entries(refs).forEach(([ref,evs])=>{
+      const fevs=pr?evs.filter(e=>e.pr===pr):evs;
+      if(!fevs.length)return;
+      if(!nadiMap[ref])nadiMap[ref]={z:0,c:0,p:0,tot:0,wks:new Set()};
+      nadiMap[ref].z+=fevs.filter(e=>e.st==='z').length;
+      nadiMap[ref].c+=fevs.filter(e=>e.st==='c').length;
+      nadiMap[ref].p+=fevs.filter(e=>e.st==='p').length;
+      nadiMap[ref].tot+=fevs.length;
+      nadiMap[ref].wks.add(wkk);
+    });
+  });
+
+  const allRows=NI.map(([ref,nm,state])=>{
+    const m=nadiMap[ref];
+    return{ref,nm,state,z:m?m.z:0,c:m?m.c:0,p:m?m.p:0,tot:m?m.tot:0,wks:m?m.wks.size:0,ut:!m};
+  });
+
+  const f=allRows.filter(r=>{
+    if(pr&&r.ut)return false;  // hide untouched when program filter active
+    if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
+    if(st&&r.state!==st)return false;
+    if(sf==='z'&&r.z===0)return false;
+    if(sf==='ok'&&(r.z>0||r.p>0||r.ut))return false;
+    if(sf==='ut'&&!r.ut)return false;
+    return true;
+  }).sort((a,b)=>b.z-a.z||a.nm.localeCompare(b.nm));
+
+  document.getElementById('bnfc').textContent=fN(f.length)+' sites';
+  document.getElementById('bnTb').innerHTML=f.map((r,i)=>`
+    <tr onclick="oBnP('${r.ref}')" id="bnr_${r.ref.replace(/[^a-z0-9]/gi,'_')}">
+      <td style="color:var(--t3);font-size:10px">${i+1}</td>
+      <td><div style="font-weight:${r.ut?400:600};color:${r.ut?'var(--t3)':'var(--t1)'}">${ce(r.nm)}</div><div style="font-size:10px;color:var(--t3)">${r.ref}</div></td>
+      <td style="font-size:11px;color:var(--t2)">${ce(r.state)}</td>
+      <td style="color:var(--t2)">${r.wks||'—'}</td>
+      <td style="font-weight:${r.tot?600:400}">${r.tot||'—'}</td>
+      <td>${r.z?`<b style="color:var(--red)">${r.z}</b>`:'—'}</td>
+      <td>${r.p?`<span style="color:var(--amber)">${r.p}</span>`:'—'}</td>
+      <td>${r.c?`<span style="color:var(--green)">${r.c}</span>`:'—'}</td>
+    </tr>`).join('');
+}
+function oBnP(ref){
+  const d=window._D;if(!d)return;const wk=d.weekly,col=COL[d.nadi.mod]||'#555';
+  const ni=NI.find(n=>n[0]===ref)||[ref,ref,'—'];
+  document.querySelectorAll('#bnTb tr').forEach(r=>r.classList.remove('sel'));
+  const el=document.getElementById('bnr_'+ref.replace(/[^a-z0-9]/gi,'_'));if(el)el.classList.add('sel');
+  document.getElementById('bnPT').textContent=ni[1];document.getElementById('bnPRf').textContent=`${ref} · ${ni[2]}`;
+  document.getElementById('bnPR').className='split-r open';
+  const activeRefs=new Set(wk.active_refs);
+  if(!activeRefs.has(ref)){
+    document.getElementById('bnPB').innerHTML=`<div class="ut-banner"><div class="ut-banner-t">⚠ Untouched NADI</div><div class="ut-banner-s">0 events in this subcategory. SSO should activate programs.</div></div>
+      ${d.nadi.progs.map(p=>`<div class="ev-row"><div class="ev-meta"><span style="color:var(--t3)">${ce(p)}</span><span class="att-z">0 events</span></div></div>`).join('')}`;
+    return;
+  }
+  const byWeek={};Object.entries(wk.nw).forEach(([wkk,refs])=>{if(refs[ref])byWeek[wkk]=refs[ref];});
+  const wksSorted=wk.weeks.filter(w=>byWeek[w.k]);
+  let html='';
+  wksSorted.forEach(w=>{
+    const evs=byWeek[w.k];const z=evs.filter(e=>e.st==='z');
+    html+=`<div style="margin-bottom:12px"><div class="ev-sec-hdr" style="${z.length?'color:var(--red)':''}">${w.k} · ${w.l} ${z.length?`<span style="color:var(--red)">⚠ ${z.length} zero</span>`:''}</div>
+      ${evs.map(e=>`<div class="ev-row" style="${e.st==='z'?'background:#fff8f8;border-radius:4px;padding:5px 8px;margin-bottom:2px':''}">
+        <div class="ev-prog" style="color:${col}">${ce(e.pr)}</div><div class="ev-name">${ce(e.pn)}</div>
+        <div class="ev-meta"><span class="${e.st==='z'?'att-z':e.st==='c'?'att-ok':'att-p'}">${e.st==='z'?'⚠ 0':'att:'} ${e.at}/${e.tp}</span>
+        <span class="sso-tag">${e.sso}</span></div></div>`).join('')}</div>`;
+  });
+  document.getElementById('bnPB').innerHTML=html;
+}
+function cBnP(){document.getElementById('bnPR').className='split-r';document.querySelectorAll('#bnTb tr').forEach(r=>r.classList.remove('sel'));}
+
+/* weekly > by event */
+function rWkByEvent(wk,nd){
+  const col=COL[nd.mod]||'#555';
+  const wks=[...new Set(wk.zero.map(e=>e.wk))].sort();
+  const sts=[...new Set(wk.zero.map(e=>e.s).filter(s=>s!=='—'))].sort();
+  const prs=[...new Set(wk.zero.map(e=>e.pr))].sort();
+  document.getElementById('wTC').innerHTML=`
+    <div style="font-size:11px;color:var(--t2);margin-bottom:8px;flex-shrink:0">
+      <b style="color:var(--red)">${wk.zero.length} events with 0 attendance</b> — click week bar to filter, or use filters below.
+    </div>
+    <div class="toolbar" style="flex-shrink:0">
+      <select id="evWk" onchange="fWkEv()"><option value="">All weeks</option>${wks.map(wkk=>{const wm=wk.weeks.find(w=>w.k===wkk);return`<option value="${wkk}">${wkk}${wm?' — '+wm.l.slice(0,15):''}</option>`;}).join('')}</select>
+      <select id="evSt" onchange="fWkEv()"><option value="">All states</option>${sts.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
+      <select id="evPr" onchange="fWkEv()"><option value="">All programs</option>${prs.map(p=>`<option value="${ce(p)}">${ce(p)}</option>`).join('')}</select>
+      <input id="evQ" placeholder="Search NADI…" oninput="fWkEv()">
+      <span class="fc" id="evFc"></span>
+    </div>
+    <div class="tbl-wrap"><table><thead><tr>
+      <th style="width:26px">#</th><th>NADI site</th><th>State</th>
+      <th>Week</th><th>Program</th><th>program_name</th><th>Pax</th><th>SSO</th>
+    </tr></thead><tbody id="evTb"></tbody></table></div>`;
+  if(selWeek){const el=document.getElementById('evWk');if(el)el.value=selWeek;}
+  fWkEv();
+}
+function fWkEv(){
+  const d=window._D;if(!d)return;const wk=d.weekly;
+  const wkk=(document.getElementById('evWk')||{value:''}).value;
+  const st=(document.getElementById('evSt')||{value:''}).value;
+  const pr=(document.getElementById('evPr')||{value:''}).value;
+  const q=(document.getElementById('evQ')||{value:''}).value.toLowerCase();
+  const _evAllow=selWeek?new Set([selWeek]):selMonth?new Set((_monthSeq[selMonth]||{}).wks||[]):null;
+  const f=wk.zero.filter(e=>{
+    if(_evAllow&&!_evAllow.has(e.wk))return false;
+    if(!_evAllow&&wkk&&e.wk!==wkk)return false;
+    if(st&&e.s!==st)return false;
+    if(pr&&e.pr!==pr)return false;
+    if(q&&!e.nm.toLowerCase().includes(q)&&!e.ref.toLowerCase().includes(q))return false;
+    return true;
+  }).sort((a,b)=>a.wk.localeCompare(b.wk)||a.s.localeCompare(b.s)||a.nm.localeCompare(b.nm));
+  document.getElementById('evFc').textContent=fN(f.length)+' events';
+  document.getElementById('evTb').innerHTML=f.map((e,i)=>`<tr>
+    <td style="color:var(--t3);font-size:10px">${i+1}</td>
+    <td><div style="font-weight:600">${ce(e.nm)}</div><div style="font-size:10px;color:var(--t3)">${e.ref}</div></td>
+    <td style="font-size:11px;color:var(--t2)">${ce(e.s)}</td>
+    <td style="font-weight:600;color:var(--purple);font-size:11px;white-space:nowrap">${e.wk}</td>
+    <td style="font-size:11px" title="${ce(e.pr)}">${ce(e.pr.length>20?e.pr.slice(0,20)+'…':e.pr)}</td>
+    <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ce(e.pn)}">${ce(e.pn)}</td>
+    <td style="text-align:center"><span class="att-z">${e.tp}</span></td>
+    <td><span class="sso-tag">${e.sso}</span></td>
+  </tr>`).join('');
+}
+
+/* ── SLIDE PANEL (NADI Index) ── */
+function openPanel(ni_idx){
+  const[ref,nm,state]=NI[ni_idx];
+  document.querySelectorAll('tbody tr').forEach(r=>r.classList.remove('sel'));
+  ['ri','mi'].forEach(p=>{const el=document.getElementById(p+ni_idx);if(el)el.classList.add('sel');});
+  document.getElementById('ptitle').textContent=nm;
+  document.getElementById('pref').textContent=`${ref} · ${state}`;
+  document.getElementById('ptabs').innerHTML=`<button class="ptab on">Summary</button>`;
+  renderPanelSum(ni_idx,ref);
+  document.getElementById('panel').classList.add('open');
+  document.getElementById('ov2').classList.add('open');
+}
+function renderPanelSum(ni_idx,ref){
+  const d=window._D;if(!d)return;const nd=d.nadi,col=COL[nd.mod]||'#555';
+  const aMap={};nd.rows.forEach(([i,e,p,pr])=>aMap[i]={e,p,pr});const a=aMap[ni_idx];
+  let html='';
+  if(!a){
+    html+=`<div class="put"><div class="put-t">No events in this subcategory</div><div class="put-s">Programs not yet activated:</div></div>`;
+    html+=nd.progs.map(p=>`<div class="prow"><div class="pdot2" style="background:var(--line)"></div><span class="pname" style="color:var(--t3)">${ce(p)}</span><span class="pmiss">0 events</span></div>`).join('');
+  } else {
+    html+=`<div style="font-size:11px;color:var(--t2);font-weight:600;margin-bottom:8px">${nd.cat} · ${nd.mod} — ${fN(a.e)} ev · ${fN(a.p)} pax</div>`;
+    html+=nd.progs.map((p,k)=>{const pr=a.pr[String(k)];return pr
+      ?`<div class="prow"><div class="pdot2" style="background:${col}"></div><span class="pname">${ce(p)}</span><span class="pev">${fN(pr[0])}</span><span class="ppax">${fN(pr[1])} pax</span></div>`
+      :`<div class="prow"><div class="pdot2" style="background:var(--line)"></div><span class="pname" style="color:var(--t3)">${ce(p)}</span><span class="pmiss">not active</span></div>`;
+    }).join('');
+    // Monthly spark
+    const sm=d.monthly;const smMap={};
+    (sm.rows||[]).forEach(r=>{smMap[r[0]]=Array.isArray(r[1])?r[1]:[];});
+    const vals=smMap[ni_idx]||[];const maxV=Math.max(...vals,1);
+    if(vals.some(v=>v>0)){
+      html+=`<div style="margin-top:12px;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">Monthly trend</div>
+        <div class="spark">${vals.map((v,i)=>`<div style="flex:1;height:${Math.max(v>0?3:0,Math.round(v/maxV*26))}px;background:${v>0?col:'#e8e6e3'};border-radius:2px 2px 0 0;align-self:flex-end" title="${sm.months[i]}: ${v}"></div>`).join('')}</div>
+        <div style="display:flex;margin-top:2px">${sm.months.map(m=>`<span style="flex:1;text-align:center;font-size:8px;color:var(--t3);overflow:hidden">${m.slice(0,3)}</span>`).join('')}</div>`;
+    }
+    // Zero events for this NADI
+    const nadiZero=d.weekly.zero.filter(e=>e.ref===ref);
+    if(nadiZero.length){
+      html+=`<div style="margin-top:14px"><div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">⚠ ${nadiZero.length} events with 0 attendance</div>
+        ${nadiZero.map(e=>`<div class="ev-row"><div class="ev-prog" style="color:${col}">${ce(e.pr)}</div>
+        <div class="ev-name">${ce(e.pn)}</div>
+        <div class="ev-meta"><span style="color:var(--t3)">${e.wk}</span><span class="att-z">0/${e.tp}</span><span class="sso-tag">${e.sso}</span></div></div>`).join('')}</div>`;
+    }
+  }
+  document.getElementById('pb').innerHTML=html;
+}
+function closePanel(){document.getElementById('panel').classList.remove('open');document.getElementById('ov2').classList.remove('open');document.querySelectorAll('tbody tr').forEach(r=>r.classList.remove('sel'));}
+
+boot();
+</script>
+</body>
+</html>
