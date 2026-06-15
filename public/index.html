@@ -695,6 +695,7 @@ function renderMonthly(d){
         <input id="mq" placeholder="Search NADI name or ref…" oninput="fM()">
         <select id="mst" onchange="fM()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
         <select id="msf" onchange="fM()"><option value="">All NADI</option><option value="a">Active only</option><option value="u">Untouched only</option></select>
+        <select id="mprog" onchange="fM()"><option value="">All programs</option>${progs.map((p,pi)=>`<option value="${pi}">${ce(p.length>22?p.slice(0,21)+'…':p)}</option>`).join('')}</select>
         <span class="fc" id="mfc"></span>
         <button id="exportBtn" class="export-btn" onclick="exportXlsx()" title="Download MCMC/TM Data Smart Services report">⬇ Export Excel</button>
       </div>
@@ -782,12 +783,16 @@ function fM(){
   const q=(document.getElementById('mq')||{value:''}).value.toLowerCase();
   const st=(document.getElementById('mst')||{value:''}).value;
   const sf=(document.getElementById('msf')||{value:''}).value;
+  const sp=(document.getElementById('mprog')||{value:''}).value;
+  const mi=_filteredMI;
+  const dataMonthIdx=selMonth!==null?(mi?mi[selMonth]:selMonth):null;
 
   const f=tRowsAll.filter(r=>{
     if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
     if(st&&r.state!==st)return false;
     if(sf==='a'&&r.st==='u')return false;
     if(sf==='u'&&r.st!=='u')return false;
+    if(sp!==''){const prD=((aMap[r.i]||{}).pr||{})[sp];if(!prD)return false;const ev=prD.ev||[];const hasEv=dataMonthIdx!==null?(ev[dataMonthIdx]||0)>0:mi?mi.some(j=>(ev[j]||0)>0):ev.some(v=>v>0);if(!hasEv)return false;}
     return true;
   });
   document.getElementById('mfc').textContent=fN(f.length)+' sites';
