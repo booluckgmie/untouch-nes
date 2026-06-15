@@ -212,10 +212,13 @@ table.t-mo tfoot td.f-st {position:sticky;left:240px;z-index:3;background:#fafaf
   .split-r.open{display:flex;max-height:50vh}
   .ov-grid{grid-template-columns:repeat(2,1fr)}
   .fc{margin-left:0}
+  table.t-mo thead th.f-ref,table.t-mo tbody td.f-ref,table.t-mo tfoot td.f-ref{min-width:65px;max-width:65px}
+  table.t-mo thead th.f-nm,table.t-mo tbody td.f-nm,table.t-mo tfoot td.f-nm{min-width:100px;max-width:100px;left:65px}
+  table.t-mo thead th.f-st,table.t-mo tbody td.f-st,table.t-mo tfoot td.f-st{min-width:60px;max-width:60px;left:165px}
+  .toolbar select{font-size:11px;padding:4px 6px}
 }
 @media(max-width:480px){
   .ov-grid{grid-template-columns:1fr}
-  .kpi{min-width:100%}
   .tab-btn{padding:8px 10px;font-size:11px}
   .toolbar input{width:110px}
   .top-bar{padding:8px 12px 0}
@@ -603,6 +606,7 @@ function renderMonthly(d){
 
   window._mAMap=aMap; window._mProgs=progs; window._mMonths=months;
   window._mCol=col; window._mMH=mH; window._mProgColors=PROG_COLORS;
+  window._mDispMonths=dispMonths; window._mMTot=mTot; window._mMaxT=maxT;
 
   // Row 1: program names spanning 2 cols each
   const hdr1=progs.map((p,pi)=>{
@@ -615,11 +619,6 @@ function renderMonthly(d){
     `<th style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3)">Pax</th>`
   ).join('');
 
-  const sumBars=mTot.map((v,i)=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px" title="${dispMonths[i]}: ${fN(v)} events">
-      <div style="width:100%;height:${v>0?Math.max(3,Math.round(v/maxT*38)):2}px;background:${v>0?col:'#e8e6e3'};border-radius:2px 2px 0 0;align-self:flex-end"></div>
-      <span style="font-size:7px;color:var(--t3);text-align:center;overflow:hidden;white-space:nowrap;width:100%">${mH(dispMonths[i])}</span>
-    </div>`).join('');
-
   document.getElementById('tB').innerHTML=`
     <div class="kpi-row">
       <div class="kpi"><div class="kpi-l">Period</div><div class="kpi-v" style="font-size:14px;font-weight:600">${dispMonths[0]||'—'}</div><div class="kpi-s">to ${dispMonths[dispMonths.length-1]||'—'}</div></div>
@@ -629,8 +628,9 @@ function renderMonthly(d){
     </div>
     <div style="padding:0 24px 8px;flex-shrink:0">
       <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:700">Events by month (all programs)</div>
-      <div style="display:flex;align-items:flex-end;gap:3px;height:52px">${sumBars}</div>
+      <div id="mBarsWrap" style="display:flex;align-items:flex-end;gap:3px;height:52px;overflow-x:auto;cursor:pointer"></div>
     </div>
+    <div id="mMonthLbl" style="padding:0 24px 2px;flex-shrink:0;min-height:20px"></div>
     <div style="display:flex;gap:8px;font-size:10px;color:var(--t3);align-items:center;flex-shrink:0;padding:2px 24px 6px">
       Heat (events):&nbsp;
       <span style="width:14px;height:8px;border-radius:2px;background:#e6e4e1;display:inline-block"></span>0&nbsp;
@@ -689,6 +689,33 @@ function renderMonthly(d){
     td.style.cssText='text-align:center;font-weight:700;color:'+(j?'var(--t2)':col)+';border-left:'+(j?'none':'2px solid var(--line)')+';';
     foot.appendChild(td);
   });
+  renderMonthBars();
+  fM();
+}
+
+function renderMonthBars(){
+  const container=document.getElementById('mBarsWrap');if(!container)return;
+  const dispMonths=window._mDispMonths||window._mMonths||[],mTot=window._mMTot||[],maxT=window._mMaxT||1;
+  const col=window._mCol||'#555';
+  const mH=window._mMH||(m=>{const[mn,yr]=m.split(' ');return mn+"'"+yr.slice(2);});
+  container.innerHTML=dispMonths.map((m,i)=>{
+    const v=mTot[i]||0,sel=selMonth===i;
+    return `<div style="flex:1;min-width:30px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding:2px 1px 0;border-radius:4px 4px 0 0;background:${sel?'rgba(76,68,176,.1)':'none'}" onclick="selMonthBar(${i})" title="${m}: ${fN(v)} events">
+      <div style="width:100%;height:${v>0?Math.max(3,Math.round(v/maxT*38)):2}px;background:${v>0?col:'#e8e6e3'};border-radius:2px 2px 0 0;align-self:flex-end;opacity:${sel?1:.55};outline:${sel?'2px solid '+col:'none'};outline-offset:1px"></div>
+      <span style="font-size:7px;color:${sel?col:'var(--t3)'};text-align:center;overflow:hidden;white-space:nowrap;width:100%;font-weight:${sel?700:400}">${mH(m)}</span>
+    </div>`;
+  }).join('');
+}
+function selMonthBar(mi){
+  selMonth=(selMonth===mi)?null:mi;
+  renderMonthBars();
+  const lbl=document.getElementById('mMonthLbl');
+  if(lbl){
+    if(selMonth!==null){
+      const dispMonths=window._mDispMonths||window._mMonths||[];
+      lbl.innerHTML=`<span style="background:#eeedfb;color:var(--purple);padding:2px 10px;border-radius:10px;font-size:10px;font-weight:600">${dispMonths[selMonth]||''} <span style="cursor:pointer;margin-left:4px" onclick="selMonthBar(${selMonth})">✕</span></span>`;
+    } else {lbl.innerHTML='';}
+  }
   fM();
 }
 
@@ -720,8 +747,9 @@ function fM(){
   document.getElementById('mTb').innerHTML=f.map(r=>{
     const a=aMap[r.i]||{tot:[],pax:[],pr:{}};
     const mi=_filteredMI;
-    const progEv=progs.map((_,pi)=>{const ev=((a.pr[String(pi)]||{}).ev||[]);return mi?mi.reduce((s,j)=>s+(ev[j]||0),0):ev.reduce((s,v)=>s+(v||0),0);});
-    const progPx=progs.map((_,pi)=>{const px=((a.pr[String(pi)]||{}).px||[]);return mi?mi.reduce((s,j)=>s+(px[j]||0),0):px.reduce((s,v)=>s+(v||0),0);});
+    const dataMonthIdx=selMonth!==null?(mi?mi[selMonth]:selMonth):null;
+    const progEv=progs.map((_,pi)=>{const ev=((a.pr[String(pi)]||{}).ev||[]);if(dataMonthIdx!==null)return ev[dataMonthIdx]||0;return mi?mi.reduce((s,j)=>s+(ev[j]||0),0):ev.reduce((s,v)=>s+(v||0),0);});
+    const progPx=progs.map((_,pi)=>{const px=((a.pr[String(pi)]||{}).px||[]);if(dataMonthIdx!==null)return px[dataMonthIdx]||0;return mi?mi.reduce((s,j)=>s+(px[j]||0),0):px.reduce((s,v)=>s+(v||0),0);});
     const totEv=progEv.reduce((s,v)=>s+v,0);
     const totPx=progPx.reduce((s,v)=>s+v,0);
     grandEv+=totEv; grandPx+=totPx;
@@ -732,7 +760,7 @@ function fM(){
     ).join('');
     return `<tr onclick="openMoPanel(${r.i})" id="mi${r.i}" style="cursor:pointer">
       <td class="f-ref">${ce(r.ref)}</td>
-      <td class="f-nm" title="${ce(r.nm)}"><div style="font-weight:${totEv?600:400};color:${totEv?'var(--t1)':'var(--t3)'};font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:145px">${ce(r.nm)}</div></td>
+      <td class="f-nm" title="${ce(r.nm)}"><div style="font-weight:${totEv?600:400};color:${totEv?'var(--t1)':'var(--t3)'};font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${ce(r.nm)}</div></td>
       <td class="f-st">${ce(r.state)}</td>
       ${cells}
       <td style="text-align:center;font-weight:${totEv?700:400};color:${totEv?col:'var(--t3)'};border-left:2px solid var(--line)">${totEv?fN(totEv):'—'}</td>
