@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NES Analytics Dashboard</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%234c44b0'/><text x='16' y='22' text-anchor='middle' font-size='18' fill='white' font-family='sans-serif' font-weight='bold'>N</text></svg>">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -186,6 +187,9 @@ table.t-mo tfoot td.f-st {position:sticky;left:240px;z-index:3;background:#fafaf
 .filter-apply:hover{opacity:.88}
 .filter-clr{margin-top:4px;width:100%;padding:4px;font-size:10px;background:none;border:1px solid var(--line);border-radius:6px;cursor:pointer;color:var(--t3)}
 .filter-clr:hover{border-color:var(--t2);color:var(--t1)}
+.export-btn{display:flex;align-items:center;gap:5px;padding:5px 12px;font-size:11px;font-weight:600;background:var(--green);color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;transition:opacity .15s}
+.export-btn:hover{opacity:.85}
+.export-btn:disabled{opacity:.5;cursor:not-allowed}
 /* MOBILE */
 .sb-toggle{display:none;position:fixed;top:10px;left:10px;z-index:200;width:38px;height:38px;border:1px solid var(--line);border-radius:8px;background:var(--card);cursor:pointer;align-items:center;justify-content:center;font-size:18px;color:var(--t1);box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .sb-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.32);z-index:149}
@@ -282,6 +286,53 @@ function toggleSb(){
 function closeSb(){
   document.querySelector('.sb').classList.remove('open');
   const bd=document.getElementById('sbBd');if(bd)bd.classList.remove('open');
+}
+
+async function exportXlsx(){
+  const btn=document.getElementById('exportBtn');
+  if(!curSub||!window._D){return;}
+  if(btn){btn.disabled=true;btn.textContent='⏳ Generating…';}
+  try{
+    const d=window._D,sm=d.monthly,rows=sm.rows||[],months=sm.months||[];
+    const MN={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+    const monthMap={};
+    months.forEach((m,i)=>{const mn=(m||'').split(' ')[0].slice(0,3);if(mn in MN)monthMap[i]=MN[mn];});
+    const STATES=['JOHOR','KEDAH','KELANTAN','MELAKA','NEGERI SEMBILAN','PAHANG','PERAK','PERLIS',
+      'PULAU PINANG','SABAH','SARAWAK','SELANGOR','TERENGGANU','W.P KUALA LUMPUR','W.P LABUAN','W.P PUTRAJAYA'];
+    const stateEv={};STATES.forEach(s=>stateEv[s]=new Array(12).fill(0));
+    rows.forEach(row=>{
+      const ni=NI[row[0]],totEv=Array.isArray(row[1])?row[1]:[];
+      if(!ni)return;
+      const state=String(ni[2]||'').toUpperCase().trim();
+      if(!(state in stateEv))return;
+      Object.entries(monthMap).forEach(([di,mo])=>stateEv[state][mo]+=(totEv[+di]||0));
+    });
+    const resp=await fetch('/data/template_report.xlsx');
+    if(!resp.ok)throw new Error('Template not found');
+    const buf=new Uint8Array(await resp.arrayBuffer());
+    const wb=XLSX.read(buf,{type:'array',cellStyles:true,bookSST:true});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const sc=(r,c,v)=>{
+      const addr=XLSX.utils.encode_cell({r:r-1,c:c-1});
+      const cur=ws[addr]||{};
+      ws[addr]={...cur,v:v||null,t:v?'n':'z'};
+    };
+    STATES.forEach((state,si)=>{
+      const rowNum=6+si,ev=stateEv[state];let tot=0;
+      for(let mo=0;mo<12;mo++){sc(rowNum,3+mo,ev[mo]||null);tot+=ev[mo];}
+      sc(rowNum,15,tot||null);
+    });
+    let grand=0;
+    for(let mo=0;mo<12;mo++){
+      const t=STATES.reduce((s,st)=>s+stateEv[st][mo],0);
+      sc(22,3+mo,t||null);grand+=t;
+    }
+    sc(22,15,grand||null);sc(23,3,grand||null);
+    const info=SUBS[curSub]||{};
+    XLSX.writeFile(wb,`NES_${info.mod||'Report'}_${new Date().toISOString().slice(0,10)}.xlsx`,
+      {bookType:'xlsx',cellStyles:true,bookSST:true});
+  }catch(e){alert('Export failed: '+e.message);}
+  finally{if(btn){btn.disabled=false;btn.textContent='⬇ Export Excel';}}
 }
 
 async function boot(){
@@ -645,6 +696,7 @@ function renderMonthly(d){
         <select id="mst" onchange="fM()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
         <select id="msf" onchange="fM()"><option value="">All NADI</option><option value="a">Active only</option><option value="u">Untouched only</option></select>
         <span class="fc" id="mfc"></span>
+        <button id="exportBtn" class="export-btn" onclick="exportXlsx()" title="Download MCMC/TM Data Smart Services report">⬇ Export Excel</button>
       </div>
       <div class="tbl-wrap">
         <table class="t-mo" id="mTable">
