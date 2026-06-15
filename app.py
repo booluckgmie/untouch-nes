@@ -234,6 +234,88 @@ def api_cache_invalidate_all():
     return jsonify({"ok": True})
 
 
+@app.route("/api/export/<int:sub_id>")
+def api_export(sub_id: int):
+    """Generate Excel report in MCMC/TM Data Smart Services template format."""
+    import io
+    import openpyxl
+    from flask import send_file
+
+    cached = C.get(f"sub_{sub_id}")
+    if not cached:
+        return jsonify({"ok": False, "error": "Data not cached — fetch first"}), 404
+
+    monthly    = cached.get("monthly", {})
+    months_lst = monthly.get("months", [])   # ["Jan 2026", …]
+    rows       = monthly.get("rows", [])     # [[nadi_idx,[ev…],[pax…],{pk:{ev,px}}],…]
+
+    # Map each data-list index → 0-based month offset (0=Jan … 11=Dec)
+    MN = {'Jan':0,'Feb':1,'Mar':2,'Apr':3,'May':4,'Jun':5,
+          'Jul':6,'Aug':7,'Sep':8,'Oct':9,'Nov':10,'Dec':11}
+    month_map = {}
+    for i, m in enumerate(months_lst):
+        mn = (m or '').split()[0][:3]
+        if mn in MN:
+            month_map[i] = MN[mn]
+
+    # 16 states in template row order (rows 6–21)
+    STATES = ['JOHOR','KEDAH','KELANTAN','MELAKA','NEGERI SEMBILAN',
+              'PAHANG','PERAK','PERLIS','PULAU PINANG','SABAH',
+              'SARAWAK','SELANGOR','TERENGGANU','W.P KUALA LUMPUR',
+              'W.P LABUAN','W.P PUTRAJAYA']
+
+    # Aggregate total events per state × month (0-indexed)
+    state_ev = {s: [0]*12 for s in STATES}
+    for row in rows:
+        if not row or len(row) < 2:
+            continue
+        nadi_idx = row[0]
+        tot_ev   = row[1] if isinstance(row[1], list) else []
+        if nadi_idx < len(_STATIC_SITES):
+            state = str(_STATIC_SITES[nadi_idx][2]).upper().strip()
+            if state in state_ev:
+                for data_i, col_off in month_map.items():
+                    if data_i < len(tot_ev):
+                        state_ev[state][col_off] += int(tot_ev[data_i] or 0)
+
+    # Load template — preserves all cell styles, merges, colours
+    tmpl = Path(__file__).parent / "template_report.xlsx"
+    wb   = openpyxl.load_workbook(str(tmpl))
+    ws   = wb.active
+
+    # Fill ALL-NADI events: cols C–N (openpyxl col 3–14), rows 6–21
+    for si, state in enumerate(STATES):
+        row_num = 6 + si
+        ev = state_ev[state]
+        for mo in range(12):
+            ws.cell(row=row_num, column=3 + mo).value = ev[mo] if ev[mo] else None
+        ws.cell(row=row_num, column=15).value = sum(ev) or None   # col O = TOTAL
+
+    # Row 22 — TOTAL BY MONTH
+    for mo in range(12):
+        total = sum(state_ev[s][mo] for s in STATES)
+        ws.cell(row=22, column=3 + mo).value = total if total else None
+    grand = sum(sum(state_ev[s]) for s in STATES)
+    ws.cell(row=22, column=15).value = grand or None
+
+    # Row 23 — TOTAL BY PROGRAMME (merged C23:N23 — write to first cell)
+    ws.cell(row=23, column=3).value = grand or None
+
+    info  = DB.SUBCATEGORIES.get(sub_id, {})
+    mod   = info.get("mod", f"Sub{sub_id}")
+    start = cached.get("start_date") or "ALL"
+    end   = cached.get("end_date")   or str(date.today())
+    fname = f"NES_{mod}_{start}_{end}.xlsx"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(buf,
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                     as_attachment=True,
+                     download_name=fname)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     print("\n  NES Analytics Dashboard  ->  http://localhost:5001\n", flush=True)
