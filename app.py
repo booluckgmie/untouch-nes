@@ -24,7 +24,7 @@ app = Flask(__name__)
 # sub01 NADI4U-Entrepreneur | sub02 NADI4U-LifelongLearning
 # sub03 NADI4U-Wellbeing    | sub08 NADI2U-Wellbeing
 # sub04-07, sub09-10 are not part of this reporting scope.
-ACTIVE_SUBS = {1, 2, 3, 8}
+ACTIVE_SUBS = {1, 2, 3, 4, 8}
 
 # ── Static 1,099 NADI index — loaded from data/all_sites.json ────────────────
 _SITES_FILE   = Path(__file__).parent / "data" / "all_sites.json"
