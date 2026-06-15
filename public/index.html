@@ -186,9 +186,46 @@ table.t-mo tfoot td.f-st {position:sticky;left:240px;z-index:3;background:#fafaf
 .filter-apply:hover{opacity:.88}
 .filter-clr{margin-top:4px;width:100%;padding:4px;font-size:10px;background:none;border:1px solid var(--line);border-radius:6px;cursor:pointer;color:var(--t3)}
 .filter-clr:hover{border-color:var(--t2);color:var(--t1)}
+/* MOBILE */
+.sb-toggle{display:none;position:fixed;top:10px;left:10px;z-index:200;width:38px;height:38px;border:1px solid var(--line);border-radius:8px;background:var(--card);cursor:pointer;align-items:center;justify-content:center;font-size:18px;color:var(--t1);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.sb-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.32);z-index:149}
+.sb-backdrop.open{display:block}
+@media(max-width:768px){
+  html,body{height:auto;overflow-y:auto}
+  .shell{grid-template-columns:1fr;height:auto;min-height:100vh}
+  .sb{position:fixed;left:0;top:0;height:100vh;width:260px;z-index:150;transform:translateX(-100%);transition:transform .22s ease}
+  .sb.open{transform:translateX(0)}
+  .sb-toggle{display:flex}
+  .main{height:auto;overflow:visible;padding-top:56px}
+  .top-bar{padding:10px 14px 0}
+  .kpi-row{padding:10px 14px;flex-wrap:wrap}
+  .kpi{min-width:calc(50% - 5px)}
+  .tab-bar{padding:0 14px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .content{padding:0 14px 14px;overflow:visible;flex:none}
+  .tbl-wrap{max-height:60vh;overflow:auto}
+  .toolbar input{width:130px}
+  .page-hdr{flex-direction:column;gap:4px}
+  .page-meta{text-align:left}
+  .panel{width:100vw}
+  .split{flex-direction:column}
+  .split-r{width:100%;display:none}
+  .split-r.open{display:flex;max-height:50vh}
+  .ov-grid{grid-template-columns:repeat(2,1fr)}
+  .fc{margin-left:0}
+}
+@media(max-width:480px){
+  .ov-grid{grid-template-columns:1fr}
+  .kpi{min-width:100%}
+  .tab-btn{padding:8px 10px;font-size:11px}
+  .toolbar input{width:110px}
+  .top-bar{padding:8px 12px 0}
+  .content{padding:0 12px 12px}
+}
 </style>
 </head>
 <body>
+<button class="sb-toggle" id="sbToggle" onclick="toggleSb()">&#9776;</button>
+<div class="sb-backdrop" id="sbBd" onclick="closeSb()"></div>
 <div class="shell">
 <aside class="sb">
   <div class="sb-top">
@@ -235,12 +272,22 @@ const ce=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&
 const hc=v=>v===0?'h0':v<=5?'h1':v<=20?'h2':v<=99?'h3':'h4';
 let SUBS={},NI=[],STATES=[],curSub=null,curTab='nadi',tRowsAll=[],selWeek=null,selMonth=null,_monthSeq={},_sd='',_ed='',_clientSd='2026-01-01',_clientEd='',_filteredMI=null;
 
+function toggleSb(){
+  const sb=document.querySelector('.sb'),bd=document.getElementById('sbBd');
+  sb.classList.toggle('open');if(bd)bd.classList.toggle('open');
+}
+function closeSb(){
+  document.querySelector('.sb').classList.remove('open');
+  const bd=document.getElementById('sbBd');if(bd)bd.classList.remove('open');
+}
+
 async function boot(){
   try{
     const[rS,rN]=await Promise.all([fetch('/data/meta.json').then(r=>r.json()),fetch('/data/sites.json').then(r=>r.json())]);
     if(rN.ok){NI=rN.sites;STATES=[...new Set(NI.map(n=>n[2]))].filter(Boolean).sort();}
     if(rS.ok) rS.subcategories.forEach(s=>{SUBS[s.id]=s;});
     buildNav(); gOv(document.getElementById('navOv'));
+    document.querySelector('.sb-nav').addEventListener('click',()=>{if(window.innerWidth<=768)closeSb();});
     document.getElementById('sb-upd').textContent='Loading data…';
     autoFetchAll();
   }catch(e){
