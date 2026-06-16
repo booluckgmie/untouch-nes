@@ -5,7 +5,7 @@
 import json
 import logging
 import threading
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -124,7 +124,7 @@ def _fetch_and_cache(sub_id: int, start_date: str | None = None, end_date: str |
         _set_prog(sid, 99, "Saving …")
         C.set(f"sub_{sub_id}", {
             "sub_id":          sub_id,
-            "fetched":         str(date.today()),
+            "fetched":         datetime.now().strftime("%d %b %Y, %H:%M"),
             "start_date":      start_date,
             "end_date":        end_date,
             "programs_filter": programs,

@@ -554,7 +554,7 @@ function buildShell(id){
       <div class="page-hdr">
         <div><div class="page-title"><span class="${nd.cat==='NADI4U'?'cat-4u':'cat-2u'}">${nd.cat}</span>${ce(lbl)}</div>
         <div class="page-sub">${nd.progs.map(p=>ce(p)).join(' &nbsp;·&nbsp; ')}</div></div>
-        <div class="page-meta">Live DB &nbsp;·&nbsp; Fetched: ${d.fetched||'today'}<br>Next refresh: ~6h &nbsp;·&nbsp; ${d.start_date||d.end_date?`${d.start_date||'…'} → ${d.end_date||'…'}`:'All dates'}${d.programs_filter&&d.programs_filter.length?` &nbsp;·&nbsp; ${d.programs_filter.length} prog`:''}</div>
+        <div class="page-meta">Live DB &nbsp;·&nbsp; ${d.fetched||'today'}<br>${d.start_date||d.end_date?`${d.start_date||'…'} → ${d.end_date||'…'}`:'All dates'}${d.programs_filter&&d.programs_filter.length?` &nbsp;·&nbsp; ${d.programs_filter.length} prog`:''}</div>
       </div>
     </div>
     <div class="tab-bar">
@@ -664,7 +664,6 @@ function renderMonthly(d){
   window._mPillars=pillars; window._mDisplayPis=displayPis; window._mPiToPl=piToPl;
 
   // Build table headers — 3-level when pillars, 2-level otherwise
-  const RS=pillars?3:2;
   let theadInner;
   if(pillars){
     const hPillar=pillars.map((pl,pli)=>{
@@ -847,40 +846,34 @@ function fM(){
   const elTe=document.getElementById('mhTe');if(elTe)elTe.textContent='Total Ev'+(_mSort.k==='te'?(_mSort.d>0?' ↑':' ↓'):'');
   const elTp=document.getElementById('mhTp');if(elTp)elTp.textContent='Pax'+(_mSort.k==='tp'?(_mSort.d>0?' ↑':' ↓'):'');
 
-  const displayPis=window._mDisplayPis||progs.map((_,pi)=>pi);
-  const piToPl=window._mPiToPl||{};
-  const footEv={},footPx={};
-  displayPis.forEach(pi=>{footEv[pi]=0;footPx[pi]=0;});
+  const colDefs=window._mColDefs||progs.map((_,pi)=>({name:progs[pi],pis:[pi]}));
+  const nc=colDefs.length;
+  const footEv=new Array(nc).fill(0);
+  const footPx=new Array(nc).fill(0);
   let grandEv=0, grandPx=0;
 
-  // sp filter: hide rows where selected program has no events
+  // sp filter: works on colDef index — any prog in that column must have events
   const _spFilter=(r)=>{
     if(sp==='')return true;
-    const pi=parseInt(sp);
-    const ev=(((aMap[r.i]||{}).pr||{})[String(pi)]||{}).ev||[];
-    return selMonth!==null?(ev[selMonth]||0)>0:ev.some(v=>v>0);
+    const colPis=(colDefs[parseInt(sp)]||{pis:[]}).pis;
+    return colPis.some(pi=>{const ev=(((aMap[r.i]||{}).pr||{})[String(pi)]||{}).ev||[];return selMonth!==null?(ev[selMonth]||0)>0:ev.some(v=>v>0);});
   };
   const fF=f.filter(_spFilter);
+  // Update count after column filter
   document.getElementById('mfc').textContent=fN(fF.length)+' sites';
 
   document.getElementById('mTb').innerHTML=fF.map(r=>{
     const a=aMap[r.i]||{tot:[],pax:[],pr:{}};
-    const perEv={},perPx={};
-    displayPis.forEach(pi=>{
-      const pr=(a.pr[String(pi)]||{});
-      perEv[pi]=selMonth!==null?((pr.ev||[])[selMonth]||0):(pr.ev||[]).reduce((s,v)=>s+(v||0),0);
-      perPx[pi]=selMonth!==null?((pr.px||[])[selMonth]||0):(pr.px||[]).reduce((s,v)=>s+(v||0),0);
-    });
-    const totEv=displayPis.reduce((s,pi)=>s+perEv[pi],0);
-    const totPx=displayPis.reduce((s,pi)=>s+perPx[pi],0);
+    const colEv=colDefs.map(col2=>col2.pis.reduce((s,pi)=>{const ev=(a.pr[String(pi)]||{}).ev||[];return s+(selMonth!==null?ev[selMonth]||0:ev.reduce((s2,v)=>s2+(v||0),0));},0));
+    const colPx=colDefs.map(col2=>col2.pis.reduce((s,pi)=>{const px=(a.pr[String(pi)]||{}).px||[];return s+(selMonth!==null?px[selMonth]||0:px.reduce((s2,v)=>s2+(v||0),0));},0));
+    const totEv=colEv.reduce((s,v)=>s+v,0);
+    const totPx=colPx.reduce((s,v)=>s+v,0);
     grandEv+=totEv; grandPx+=totPx;
-    displayPis.forEach(pi=>{footEv[pi]+=perEv[pi];footPx[pi]+=perPx[pi];});
-    const cells=displayPis.map(pi=>{
-      const pli=piToPl[pi]!=null?piToPl[pi]:-1;
-      const plAttr=pli>=0?` data-pl="${pli}"`:'';
-      const ev=perEv[pi],px=perPx[pi];
-      return `<td data-pi="${pi}"${plAttr} class="${hc(ev)}" onclick="event.stopPropagation();openProgCell(${r.i},${pi})" style="text-align:center;border-left:1px solid var(--line2);font-weight:${ev?600:400};cursor:pointer">${ev?fN(ev):'·'}</td><td data-pi="${pi}"${plAttr} style="text-align:center;color:var(--t2);font-size:10px">${px?fN(px):'·'}</td>`;
-    }).join('');
+    colEv.forEach((v,ci)=>{footEv[ci]+=v;}); colPx.forEach((v,ci)=>{footPx[ci]+=v;});
+    const cells=colDefs.map((_,ci)=>
+      `<td data-pi="${ci}" class="${hc(colEv[ci])}" onclick="event.stopPropagation();openPillarCell(${r.i},${ci})" style="text-align:center;border-left:1px solid var(--line2);font-weight:${colEv[ci]?600:400};cursor:pointer">${colEv[ci]?fN(colEv[ci]):'·'}</td>`+
+      `<td data-pi="${ci}" style="text-align:center;color:var(--t2);font-size:10px">${colPx[ci]?fN(colPx[ci]):'·'}</td>`
+    ).join('');
     return `<tr onclick="openMoPanel(${r.i})" id="mi${r.i}" style="cursor:pointer">
       <td class="f-ref">${ce(r.ref)}</td>
       <td class="f-nm" title="${ce(r.nm)}"><div style="font-weight:${totEv?600:400};color:${totEv?'var(--t1)':'var(--t3)'};font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${ce(r.nm)}</div></td>
@@ -891,9 +884,9 @@ function fM(){
     </tr>`;
   }).join('');
 
-  displayPis.forEach(pi=>{
-    const ee=document.getElementById('mft_pe'+pi);if(ee)ee.textContent=footEv[pi]?fN(footEv[pi]):'—';
-    const ep=document.getElementById('mft_pp'+pi);if(ep)ep.textContent=footPx[pi]?fN(footPx[pi]):'—';
+  colDefs.forEach((_,ci)=>{
+    const ee=document.getElementById('mft_pe'+ci);if(ee)ee.textContent=footEv[ci]?fN(footEv[ci]):'—';
+    const ep=document.getElementById('mft_pp'+ci);if(ep)ep.textContent=footPx[ci]?fN(footPx[ci]):'—';
   });
   const ge=document.getElementById('mft_gev');if(ge)ge.textContent=grandEv?fN(grandEv):'—';
   const gp=document.getElementById('mft_gpx');if(gp)gp.textContent=grandPx?fN(grandPx):'—';
