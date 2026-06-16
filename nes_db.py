@@ -1,98 +1,63 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# nes_db.py  — DB query layer for NES Analytics Dashboard
-# ─────────────────────────────────────────────────────────────────────────────
-import logging
-from datetime import date, datetime, timedelta
-from typing import Optional
-
-import pandas as pd
+import re
+from datetime import date
 import psycopg2
 import psycopg2.extras
+import pandas as pd
+from tqdm import tqdm
 
-from db_configs import get_conn
+_ILLEGAL_CHARS = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
 
-_log = logging.getLogger(__name__)
-
-# ── SSO requester_id → program label override ─────────────────────────────────
-# When matched, OVERRIDES the program column (not just a display tag).
-SSO_MAP = {
-    "afc1c08c-b487-42d4-a2d1-e8d2e83b4ab5": "MAHIR",
-    "4078f98f-1a06-4c59-8d7b-a303d43a689b": "CYBERSECURITY",
-    "b0aed14c-8bec-47b7-94cb-dd5a03225787": "NADI TUISYEN RAKYAT",
-    "a15e546a-cda0-4451-a9ce-61afa15021c7": "ESPORT",
-    "2232e98a-5050-4fcd-918b-672c1a97dadd": "EKELAS",
+PG_CONFIG = {
+    "host": "43.217.146.116",
+    "port": 5432,
+    "user": "postgres.rc1vzzw53e9mcc2luokr",
+    "password": "QAAjdrBjpSjuBLmMpV76",
+    "database": "postgres",
 }
 
-# Programs superseded by SSO remap — dropped per subcategory after remap is applied.
-DROPPED_PROGRAMS: dict[int, set] = {
-    2: {"NADI-Nurture", "NADI-SkillForge"},
-    3: {"NADI TUISYEN RAKYAT"},
+# ── Subcategory IDs ────────────────────────────────────────────────────────────
+# NADI4U  : 1 Entrepreneur | 2 Lifelong Learning | 3 Wellbeing | 4 Awareness | 5 Gov Init
+# NADI2U  : 6 Entrepreneur | 7 Lifelong Learning | 8 Wellbeing | 9 Awareness | 10 Gov Init
+# OTHERS  : 11 Activity    | 12 Training          | 13 Services
+
+# ── Optional date filters (set to None to disable) ────────────────────────────
+START_DATE = None
+END_DATE   = None
+
+SUBCATEGORIES = {
+    1:  "NADI4U-Entrepreneur",
+    2:  "NADI4U-LifelongLearning",
+    3:  "NADI4U-Wellbeing",
+    4:  "NADI4U-Awareness",
+    5:  "NADI4U-GovInit",
+    6:  "NADI2U-Entrepreneur",
+    7:  "NADI2U-LifelongLearning",
+    8:  "NADI2U-Wellbeing",
+    9:  "NADI2U-Awareness",
+    10: "NADI2U-GovInit",
+    11: "OTHERS-Activity",
+    12: "OTHERS-Training",
+    13: "OTHERS-Services",
 }
-
-def sso_label(uid) -> str:
-    """Resolve requester_id UUID to SSO label (for display in weekly view)."""
-    if not uid or str(uid) in ("nan", "None", "—"):
-        return "—"
-    uid_str = str(uid).strip()
-    if uid_str in SSO_MAP:
-        return SSO_MAP[uid_str]
-    _log.warning("Unknown SSO requester_id: %s", uid_str)
-    return uid_str[:8]
-
-
-def apply_sso_remap(df: pd.DataFrame, sub_id: int) -> pd.DataFrame:
-    """Override 'program' col where requester_id matches SSO_MAP; then drop DROPPED_PROGRAMS rows."""
-    if "requester_id" not in df.columns:
-        return df
-    df = df.copy()
-    norm = df["requester_id"].astype(str).str.strip().str.lower()
-    sso_lower = {k.lower(): v for k, v in SSO_MAP.items()}
-    mask = norm.isin(sso_lower)
-    if mask.any():
-        df.loc[mask, "program"] = norm[mask].map(sso_lower)
-        _log.info("SSO remap: %d rows relabelled → %s", mask.sum(),
-                  df.loc[mask, "program"].value_counts().to_dict())
-    if sub_id in DROPPED_PROGRAMS:
-        drop_mask = df["program"].isin(DROPPED_PROGRAMS[sub_id])
-        if drop_mask.any():
-            _log.info("Dropping %d rows with superseded programs: %s", drop_mask.sum(),
-                      df.loc[drop_mask, "program"].value_counts().to_dict())
-            df = df[~drop_mask].reset_index(drop=True)
-    return df
 
 _BATCH       = 5_000
-_EVENT_CHUNK = 100
-
-# ── Subcategory map ───────────────────────────────────────────────────────────
-SUBCATEGORIES = {
-    1:  {"cat": "NADI4U", "mod": "Entrepreneur",     "label": "NADI4U-Entrepreneur"},
-    2:  {"cat": "NADI4U", "mod": "LifelongLearning", "label": "NADI4U-LifelongLearning"},
-    3:  {"cat": "NADI4U", "mod": "Wellbeing",        "label": "NADI4U-Wellbeing"},
-    4:  {"cat": "NADI4U", "mod": "Awareness",        "label": "NADI4U-Awareness"},
-    8:  {"cat": "NADI2U", "mod": "Wellbeing",        "label": "NADI2U-Wellbeing"},
-}
+_EVENT_CHUNK = 100   # events per chunk; lower if server still OOMs
 
 
 def _arr(ids) -> str:
     return ",".join(f"'{i}'" for i in ids)
 
 
-def _msort(m: str):
-    try:    return datetime.strptime(m, "%b %Y")
-    except: return datetime.min
-
-
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. Event IDs for a subcategory
+# Step 1 — Get event IDs for a given subcategory
 # ─────────────────────────────────────────────────────────────────────────────
-def _get_event_ids(conn, subcategory_id: int,
-                   start_date: Optional[str] = None,
-                   end_date:   Optional[str] = None) -> list:
+
+def _get_event_ids(conn, subcategory_id: int) -> list:
     date_filter = ""
-    if start_date:
-        date_filter += f"\n  AND e.start_datetime::date >= '{start_date}'"
-    if end_date:
-        date_filter += f"\n  AND e.end_datetime::date   <= '{end_date}'"
+    if START_DATE:
+        date_filter += f"\n  AND e.start_datetime::date >= '{START_DATE}'"
+    if END_DATE:
+        date_filter += f"\n  AND e.end_datetime::date   <= '{END_DATE}'"
     with conn.cursor() as cur:
         cur.execute(f"""
             SELECT DISTINCT e.id
@@ -109,11 +74,20 @@ def _get_event_ids(conn, subcategory_id: int,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2. Event metadata
+# Step 2 — Fetch event taxonomy + event-site geographic/admin columns
+#
+#   DISTINCT ON (e.id): if an event has multiple sites in its JSONB array,
+#   we take the first (lowest site_id integer) to avoid row explosion.
+#
+#   New columns vs old version:
+#     event_site_profile_id, event_site_name, event_site_refid_mcmc,
+#     event_site_tp, event_site_dusp, event_site_region, event_site_phase,
+#     event_site_parliament, event_site_dun, event_site_mukim, event_site_state
 # ─────────────────────────────────────────────────────────────────────────────
+
 def _fetch_events(conn, event_ids: list) -> pd.DataFrame:
     sql = f"""
-    SELECT DISTINCT
+    SELECT DISTINCT ON (e.id)
         e.id                                                AS event_id,
         COALESCE(ec.name,  '')                              AS event_category,
         COALESCE(esc.name, '')                              AS program_module,
@@ -122,44 +96,99 @@ def _fetch_events(conn, event_ids: list) -> pd.DataFrame:
         e.start_datetime::date                              AS event_startdate,
         e.end_datetime::date                                AS event_lastdate,
         COALESCE(pm.name, '')                               AS program_method,
-        e.requester_id
+        COALESCE(e.description, '')                         AS event_description,
+        e.requester_id,
+        -- ── Event-site geographic / admin columns ──────────────────────────
+        ev_nsp.id                                           AS event_site_profile_id,
+        COALESCE(ev_nsp.sitename, '')                       AS event_site_name,
+        COALESCE(ev_nsp.refid_mcmc, '')                     AS event_site_refid_mcmc,
+        COALESCE(ev_org.name, '')                           AS event_site_tp,
+        COALESCE(ev_org.description, '')                    AS event_site_dusp,
+        COALESCE(ev_reg.bm, '')                             AS event_site_region,
+        COALESCE(ev_ph.name, '')                            AS event_site_phase,
+        COALESCE(ev_parl.name, '')                          AS event_site_parliament,
+        COALESCE(ev_dun.name, '')                           AS event_site_dun,
+        COALESCE(ev_muk.name, '')                           AS event_site_mukim,
+        COALESCE(ev_st.name, '')                            AS event_site_state
     FROM public.nd_event e
-    LEFT JOIN public.nd_event_program     ep  ON ep.id  = e.program_id
-    LEFT JOIN public.nd_event_subcategory esc ON esc.id = ep.subcategory_id
-    LEFT JOIN public.nd_event_category    ec  ON ec.id  = esc.category_id
-    LEFT JOIN public.nd_program_method    pm  ON pm.id  = e.program_method
+    LEFT JOIN public.nd_event_program     ep   ON ep.id  = e.program_id
+    LEFT JOIN public.nd_event_subcategory esc  ON esc.id = ep.subcategory_id
+    LEFT JOIN public.nd_event_category    ec   ON ec.id  = esc.category_id
+    LEFT JOIN public.nd_program_method    pm   ON pm.id  = e.program_method
+    -- ── Expand event site_id JSONB array → first valid site_profile ────────
+    LEFT JOIN LATERAL jsonb_array_elements_text(e.site_id) AS j(site_id_txt) ON true
+    LEFT JOIN public.nd_site_profile  ev_nsp  ON ev_nsp.id = j.site_id_txt::int
+    LEFT JOIN public.organizations    ev_org  ON ev_org.id  = ev_nsp.dusp_tp_id
+    LEFT JOIN public.nd_region        ev_reg  ON ev_reg.id  = ev_nsp.region_id
+    LEFT JOIN public.nd_phases        ev_ph   ON ev_ph.id   = ev_nsp.phase_id
+    LEFT JOIN public.nd_parliaments   ev_parl ON ev_parl.id = ev_nsp.parliament_rfid
+    LEFT JOIN public.nd_duns          ev_dun  ON ev_dun.id  = ev_nsp.dun_rfid
+    LEFT JOIN public.nd_mukims        ev_muk  ON ev_muk.id  = ev_nsp.mukim_id
+    LEFT JOIN public.nd_state         ev_st   ON ev_st.id   = ev_nsp.state_id
     WHERE e.id = ANY(ARRAY[{_arr(event_ids)}]::uuid[])
+    ORDER BY e.id, j.site_id_txt::int ASC
     """
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
-        df = pd.DataFrame(cur.fetchall())
-    if not df.empty:
-        for col in ("event_id", "requester_id"):
-            if col in df.columns:
-                df[col] = df[col].astype(str)
-    return df
+        return pd.DataFrame(cur.fetchall())
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. Participants (chunked server-side cursor)
+# Step 3 — Fetch participants + member's home NADI site
+#
+#   Home NADI columns (unchanged from v1):
+#     refid_mcmc, nadi_name, state, standard_code
+#
+#   These are distinct from event_site_* columns — a participant's home NADI
+#   may differ from the site where the event was held.
 # ─────────────────────────────────────────────────────────────────────────────
+
 def _fetch_participants(conn, event_ids: list, cur_name: str) -> pd.DataFrame:
-    # NOTE: requester_id comes from nd_event via _fetch_events merge — NOT repeated here
     sql = f"""
     SELECT
         ep.event_id,
         ep.id                                               AS participant_id,
+        ep.ref_id                                           AS participant_ref_id,
         ep.attendance,
         ep.verified,
+        ep.registered_as_new_member,
         mp.id                                               AS member_id,
+        mp.ref_id                                           AS member_ref_id,
+        COALESCE(mp.fullname, '')                           AS fullname,
+        COALESCE(mp.identity_no, '')                        AS ic_number,
+        COALESCE(mp.identity_no_type::text, '')             AS ic_type,
+        COALESCE(mp.mobile_no, '')                          AS mobile_no,
+        COALESCE(mp.email, '')                              AS email,
+        mp.dob,
+        mp.age,
+        COALESCE(g.bm,  '')                                 AS gender,
+        COALESCE(r.bm,  '')                                 AS race,
+        COALESCE(mp.status_membership::text, '')            AS membership_status,
+        COALESCE(mp.oku_status::text, 'false')              AS oku_status,
+        COALESCE(mp.education_level::text, '')              AS education_level,
+        COALESCE(mp.income_range::text, '')                 AS income_range,
+        COALESCE(mp.nationality_id::text, '')               AS nationality_id,
+        COALESCE(mp.registration_status::text, '')          AS registration_status,
+        -- ── Member's home NADI site ────────────────────────────────────────
         ns.refid_mcmc,
         COALESCE(nsp.sitename, 'Site-' || ns.id::text)     AS nadi_name,
-        COALESCE(st.name, '')                               AS state
+        COALESCE(st.name, '')                               AS state,
+        ns.standard_code,
+        -- ── Under-12 companion ────────────────────────────────────────────
+        u12.id                                              AS under12_id,
+        COALESCE(u12.fullname,  '')                         AS under12_name,
+        COALESCE(u12.mobile_no, '')                         AS under12_phone,
+        COALESCE(g2.bm, '')                                 AS under12_gender
     FROM public.nd_event_participant ep
-    LEFT JOIN public.nd_member_profile  mp  ON mp.id  = ep.member_id
-    LEFT JOIN public.nd_site            ns  ON ns.id  = mp.ref_id
-    LEFT JOIN public.nd_site_profile    nsp ON nsp.id = ns.site_profile_id
-    LEFT JOIN public.nd_state           st  ON  st.id = nsp.state_id
+    LEFT JOIN public.nd_member_profile              mp  ON mp.id  = ep.member_id
+    LEFT JOIN public.nd_site                        ns  ON ns.id  = mp.ref_id
+    LEFT JOIN public.nd_site_profile                nsp ON nsp.id = ns.site_profile_id
+    LEFT JOIN public.nd_state                       st  ON st.id  = nsp.state_id
+    LEFT JOIN public.nd_genders g   ON g.id  = mp.gender
+    LEFT JOIN public.nd_races   r   ON r.id  = mp.race_id
+    LEFT JOIN public.nd_event_participant_under_twelve u12
+                                    ON u12.id = ep.participant_under_twelve_id
+    LEFT JOIN public.nd_genders g2  ON g2.id = u12.gender
     WHERE ep.event_id = ANY(ARRAY[{_arr(event_ids)}]::uuid[])
     """
     rows = []
@@ -171,251 +200,249 @@ def _fetch_participants(conn, event_ids: list, cur_name: str) -> pd.DataFrame:
             if not batch:
                 break
             rows.extend(batch)
-    df = pd.DataFrame(rows)
-    if not df.empty:
-        for col in ("event_id", "participant_id", "member_id"):
-            if col in df.columns:
-                df[col] = df[col].astype(str)
+    return pd.DataFrame(rows)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Main fetch — iterates chunks, merges events + participants
+# ─────────────────────────────────────────────────────────────────────────────
+
+def fetch(subcategory_id: int) -> pd.DataFrame:
+    conn = psycopg2.connect(**PG_CONFIG)
+    conn.autocommit = False
+    try:
+        with conn.cursor() as cfg:
+            cfg.execute("SET statement_timeout = 0;")
+            cfg.execute("SET work_mem = '32MB';")
+
+        print(f"Getting event IDs for subcategory_id={subcategory_id} ...")
+        event_ids = _get_event_ids(conn, subcategory_id)
+        chunks    = [event_ids[i:i + _EVENT_CHUNK] for i in range(0, len(event_ids), _EVENT_CHUNK)]
+        print(f"{len(event_ids):,} events → {len(chunks)} chunks of {_EVENT_CHUNK}")
+
+        if not event_ids:
+            print("No events found — skipping.")
+            return pd.DataFrame()
+
+        ev_frames:  list = []
+        par_frames: list = []
+
+        with tqdm(total=len(event_ids), desc=f"sub{subcategory_id}", unit="evt", dynamic_ncols=True) as pbar:
+            for idx, chunk in enumerate(chunks, 1):
+                df_ev  = _fetch_events(conn, chunk)
+                df_par = _fetch_participants(conn, chunk, f"nes_par_{idx}")
+                conn.commit()
+                ev_frames.append(df_ev)
+                par_frames.append(df_par)
+                pbar.update(len(chunk))
+                pbar.set_postfix(
+                    evrows=f"{sum(len(f) for f in ev_frames):,}",
+                    parrows=f"{sum(len(f) for f in par_frames):,}",
+                    chunk=f"{idx}/{len(chunks)}",
+                )
+
+        df_events = pd.concat(ev_frames,  ignore_index=True).drop_duplicates(subset=["event_id"])
+        df_pars   = pd.concat(par_frames, ignore_index=True)
+
+        print(f"\nMerging {len(df_events):,} events × {len(df_pars):,} participants ...")
+        df = df_pars.merge(df_events, on="event_id", how="left")
+
+        if df.empty:
+            print("No data returned.")
+            return df
+
+        df.sort_values(
+            ["event_site_state", "event_site_name", "event_startdate", "event_id", "fullname"],
+            inplace=True, ignore_index=True,
+        )
+        print(
+            f"Rows        : {len(df):,}\n"
+            f"Event sites : {df['event_site_name'].nunique():,}\n"
+            f"Events      : {df['event_id'].nunique():,}\n"
+            f"Participants: {df['participant_id'].nunique():,}"
+        )
+        return df
+    finally:
+        conn.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# All-sites reference table  (all 1099 NADI — independent of subcategory)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def fetch_all_sites() -> pd.DataFrame:
+    conn = psycopg2.connect(**PG_CONFIG)
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT
+                    ns.refid_mcmc,
+                    ns.standard_code,
+                    COALESCE(nsp.sitename, 'Site-' || ns.id::text) AS nadi_name,
+                    COALESCE(st.name, '')                           AS state
+                FROM public.nd_site            ns
+                LEFT JOIN public.nd_site_profile nsp ON nsp.id = ns.site_profile_id
+                LEFT JOIN public.nd_state         st  ON st.id  = nsp.state_id
+                ORDER BY st.name, nsp.sitename
+            """)
+            df = pd.DataFrame(cur.fetchall())
+    finally:
+        conn.close()
+    print(f"All sites loaded: {len(df):,} rows")
     return df
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4. Build NADI-index data (for "NADI Index" tab)
+# Site-level pivot  (programs × events/pax)
+#
+#   Pivot index uses member's home NADI (refid_mcmc, nadi_name, state) so that
+#   the pivot matches the all-sites reference table for a full 1099-site view.
+#   all_programs — fixed program list for consistent columns across monthly sheets.
 # ─────────────────────────────────────────────────────────────────────────────
-def build_nadi_index(df: pd.DataFrame, df_sites: pd.DataFrame, sub_id: int) -> dict:
-    """
-    Returns:
-      {
-        'cat': 'NADI4U', 'mod': 'Entrepreneur',
-        'e': total_events, 'p': total_pax,
-        'a': active_nadi,  'u': untouched_nadi,
-        'progs': ['NADI-EmpowerHER', ...],
-        'rows': [[nadi_idx, total_ev, total_pax, {prog_key:[ev,pax]}], ...]
-      }
-    """
-    info = SUBCATEGORIES.get(sub_id, {})
 
-    ev = (df.groupby("event_id")
-            .agg(refid_mcmc  =("refid_mcmc",    "first"),
-                 nadi_name   =("nadi_name",      "first"),
-                 state        =("state",          "first"),
-                 program      =("program",        "first"),
-                 program_name =("program_name",   "first"),
-                 total_pax   =("participant_id",  "nunique"),
-                 attended    =("attendance",      lambda x: int(x.sum())))
-            .reset_index())
-
-    progs    = sorted(ev["program"].dropna().unique().tolist())
-    prog_key = {p: str(k) for k, p in enumerate(progs)}
-
-    sites_list = df_sites[["refid_mcmc","nadi_name","state"]].drop_duplicates().values.tolist()
-    ref_to_i   = {r[0]: i for i, r in enumerate(sites_list)}
-
-    total_ev    = ev["event_id"].nunique()
-    total_pax   = df["participant_id"].nunique() if "participant_id" in df else 0
-    active_refs = set(ev["refid_mcmc"].dropna().unique())
-
-    # Quarterly threshold: untouched = < 3 events per quarter on average
-    _df_m = df.copy()
-    _df_m["_month"] = pd.to_datetime(_df_m["event_startdate"], errors="coerce").dt.to_period("M")
-    _df_m["_qtr"] = _df_m["_month"].apply(
-        lambda p: f"{p.year}-Q{(p.month-1)//3+1}" if pd.notna(p) else None)
-    _num_q = max(1, _df_m["_qtr"].dropna().nunique())
-    _thresh = 3 * _num_q
-
-    nadi_agg = {}
-    for _, r in ev.iterrows():
-        ref = r["refid_mcmc"]
-        if pd.isna(ref):
-            continue
-        if ref not in nadi_agg:
-            nadi_agg[ref] = {"te": 0, "tp": 0, "pr": {}}
-        prog = r["program"]
-        k    = prog_key.get(prog, "?")
-        if k not in nadi_agg[ref]["pr"]:
-            nadi_agg[ref]["pr"][k] = [0, 0]
-        nadi_agg[ref]["pr"][k][0] += 1
-        nadi_agg[ref]["pr"][k][1] += int(r["total_pax"])
-        nadi_agg[ref]["te"] += 1
-        nadi_agg[ref]["tp"] += int(r["total_pax"])
-
-    rows = []
-    for ref, agg in nadi_agg.items():
-        i = ref_to_i.get(ref)
-        if i is None:
-            continue
-        rows.append([i, agg["te"], agg["tp"], agg["pr"]])
-
-    untouched_nadi = (sum(1 for agg in nadi_agg.values() if agg["te"] < _thresh)
-                      + (len(sites_list) - len(active_refs)))
-
-    return {
-        "cat":   info.get("cat", ""),
-        "mod":   info.get("mod", ""),
-        "e":     total_ev,
-        "p":     total_pax,
-        "a":     len(active_refs),
-        "u":     untouched_nadi,
-        "progs": progs,
-        "rows":  rows,
-    }
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 5. Build monthly data (for "Monthly Update" tab)
-# ─────────────────────────────────────────────────────────────────────────────
-def build_monthly(df: pd.DataFrame, df_sites: pd.DataFrame, sub_id: int) -> dict:
-    """
-    Returns:
-      {
-        'months': ['Oct 2025', ...],
-        'progs':  ['NADI-EmpowerHER', ...],
-        'rows':   [[nadi_idx,
-                    [ev_tot_m0, ...],   # total events per month
-                    [px_tot_m0, ...],   # total pax per month
-                    {prog_key: {'ev': [ev_m0,...], 'px': [px_m0,...]}}
-                   ], ...]
-      }
-    """
-    sites_list = df_sites[["refid_mcmc","nadi_name","state"]].drop_duplicates().values.tolist()
-    ref_to_i   = {r[0]: i for i, r in enumerate(sites_list)}
-
-    has_pax = "participant_id" in df.columns
-
-    df2 = df.copy()
-    df2["_month"] = pd.to_datetime(df2["event_startdate"], errors="coerce").dt.to_period("M")
-
-    months_sorted = sorted(
-        df2["_month"].dropna().dt.strftime("%b %Y").unique(), key=_msort
+def build_site_pivot(
+    df: pd.DataFrame,
+    df_sites: pd.DataFrame,
+    all_programs: list | None = None,
+) -> pd.DataFrame:
+    all_idx = (
+        df_sites[["refid_mcmc", "nadi_name", "state"]]
+        .drop_duplicates()
+        .set_index(["refid_mcmc", "nadi_name", "state"])
+        .index
     )
 
-    progs    = sorted(df2.loc[df2["program"].notna() & (df2["program"] != ""), "program"].unique().tolist())
-    prog_key = {p: str(k) for k, p in enumerate(progs)}
-    nm       = len(months_sorted)
+    df_pax  = df[df["participant_id"].notna()].copy()
+    df_prog = df_pax[df_pax["program"].notna() & (df_pax["program"] != "")].copy()
 
-    nadi_data: dict = {}
+    agg = (
+        df_prog
+        .groupby(["refid_mcmc", "nadi_name", "state", "program"])
+        .agg(
+            events=("event_id",       "nunique"),
+            pax   =("participant_id", "nunique"),
+        )
+        .reset_index()
+    )
 
-    for mi, month_str in enumerate(months_sorted):
-        period = pd.Period(month_str, freq="M")
-        sub    = df2[df2["_month"] == period]
-        for ref, grp in sub.groupby("refid_mcmc"):
-            i = ref_to_i.get(ref)
-            if i is None:
-                continue
-            if i not in nadi_data:
-                nadi_data[i] = {"tot": [0]*nm, "pax": [0]*nm, "pr": {}}
-            nadi_data[i]["tot"][mi] = grp["event_id"].nunique()
-            nadi_data[i]["pax"][mi] = grp["participant_id"].nunique() if has_pax else 0
-            for prog, pgrp in grp.groupby("program"):
-                pk = prog_key.get(prog)
-                if pk is None:
-                    continue
-                if pk not in nadi_data[i]["pr"]:
-                    nadi_data[i]["pr"][pk] = {"ev": [0]*nm, "px": [0]*nm}
-                nadi_data[i]["pr"][pk]["ev"][mi] = pgrp["event_id"].nunique()
-                nadi_data[i]["pr"][pk]["px"][mi] = pgrp["participant_id"].nunique() if has_pax else 0
+    fixed_progs = all_programs if all_programs is not None else (
+        sorted(agg["program"].unique()) if not agg.empty else []
+    )
+    ordered = []
+    for p in fixed_progs:
+        ordered += [(p, "Sum of events"), (p, "Sum of pax")]
+    ordered += [("Total", "Sum of events"), ("Total", "Sum of pax")]
 
-    rows = [[i, d["tot"], d["pax"], d["pr"]] for i, d in sorted(nadi_data.items())]
-    return {"months": months_sorted, "progs": progs, "rows": rows}
+    if agg.empty:
+        empty = pd.DataFrame(0, index=all_idx, columns=pd.MultiIndex.from_tuples(ordered))
+        return empty
+
+    pivot = agg.pivot_table(
+        index     =["refid_mcmc", "nadi_name", "state"],
+        columns   ="program",
+        values    =["events", "pax"],
+        aggfunc   ="sum",
+        fill_value=0,
+    )
+    pivot = pivot.swaplevel(axis=1).sort_index(axis=1, level=0)
+    pivot.columns = pd.MultiIndex.from_tuples(
+        [(prog, "Sum of events" if metric == "events" else "Sum of pax")
+         for prog, metric in pivot.columns]
+    )
+
+    # True totals — avoids double-counting; captures no-program events too
+    true_ev  = df_pax.groupby(["refid_mcmc", "nadi_name", "state"])["event_id"].nunique()
+    true_pax = df_pax.groupby(["refid_mcmc", "nadi_name", "state"])["participant_id"].nunique()
+    pivot[("Total", "Sum of events")] = true_ev
+    pivot[("Total", "Sum of pax")]    = true_pax
+
+    # Fill any missing fixed-program columns (months with no data for a program)
+    for col in ordered:
+        if col not in pivot.columns:
+            pivot[col] = 0
+
+    pivot = pivot[[c for c in ordered if c in pivot.columns]]
+    return pivot.reindex(all_idx, fill_value=0).fillna(0).astype(int)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6. Build weekly data (for "Weekly Drill-Down" dashboard)
+# Monthly pivot sheets  (one pivot per calendar month + "All" summary)
+#
+#   Columns are fixed to the full program list so all sheets are identical
+#   in structure — months with no data for a program show zero columns.
 # ─────────────────────────────────────────────────────────────────────────────
-def build_weekly(df: pd.DataFrame, df_sites: pd.DataFrame, sub_id: int) -> dict:
-    """
-    Returns:
-      {
-        'cat', 'mod',
-        'weeks': [{k, l, ev, si, z, c, p}, ...],
-        'nw':    {week_key: {ref: [{pn,pr,tp,at,st,sso}]}},
-        'zero':  [{ref,nm,s,pr,pn,wk,wl,tp,sso}],
-        'active_refs': [...]
-      }
-    """
-    info = SUBCATEGORIES.get(sub_id, {})
 
-    if "requester_id" not in df.columns:
-        df = df.copy()
-        df["requester_id"] = None
+def build_monthly_sheets(df: pd.DataFrame, df_sites: pd.DataFrame) -> dict:
+    df = df.copy()
+    df["_period"] = pd.to_datetime(df["event_startdate"], errors="coerce").dt.to_period("M")
 
-    ev = (df.groupby("event_id")
-            .agg(refid_mcmc   =("refid_mcmc",    "first"),
-                 nadi_name    =("nadi_name",      "first"),
-                 state        =("state",          "first"),
-                 program      =("program",        "first"),
-                 program_name =("program_name",   "first"),
-                 event_start  =("event_startdate","first"),
-                 requester_id =("requester_id",   "first"),
-                 total_pax    =("participant_id",  "nunique"),
-                 attended     =("attendance",      lambda x: int(x.sum())))
-            .reset_index())
+    # Derive full program list from ALL months so columns stay fixed per sheet
+    all_programs = sorted(
+        df.loc[df["program"].notna() & (df["program"] != ""), "program"].unique()
+    )
 
-    ev["event_start"] = pd.to_datetime(ev["event_start"], errors="coerce")
-    ev["wstart"]      = ev["event_start"].apply(
-        lambda d: d - timedelta(days=d.weekday()) if pd.notna(d) else pd.NaT)
-    ev["wk"] = ev["wstart"].dt.strftime("W%V %Y")
-    ev["wl"] = ev["wstart"].apply(
-        lambda d: f"{d.strftime('%d %b')}–{(d+timedelta(days=6)).strftime('%d %b %Y')}"
-        if pd.notna(d) else "")
-    ev["st"] = ev.apply(
-        lambda r: "c" if r["attended"] >= r["total_pax"] and r["total_pax"] > 0
-                  else ("z" if r["attended"] == 0 else "p"), axis=1)
+    sheets = {}
+    for period in sorted(df["_period"].dropna().unique()):
+        df_m  = df[df["_period"] == period]
+        sheet = period.strftime("%b %Y")   # e.g. "Jan 2026"
+        sheets[sheet] = build_site_pivot(df_m, df_sites, all_programs)
 
-    weeks_meta = []
-    for wk, grp in ev.dropna(subset=["wk"]).groupby("wk"):
-        wl     = grp["wl"].iloc[0]
-        wstart = grp["wstart"].iloc[0]
-        weeks_meta.append({
-            "k":  wk,
-            "l":  wl,
-            "ws": str(wstart.date()) if pd.notna(wstart) else "",
-            "ev": len(grp),
-            "si": grp["refid_mcmc"].nunique(),
-            "z":  int((grp["st"] == "z").sum()),
-            "c":  int((grp["st"] == "c").sum()),
-            "p":  int((grp["st"] == "p").sum()),
-        })
-    weeks_meta.sort(key=lambda w: w.get("ws", ""))
+    sheets["All"] = build_site_pivot(df, df_sites, all_programs)
+    return sheets
 
-    nadi_week = {}
-    for _, r in ev.dropna(subset=["wk", "refid_mcmc"]).iterrows():
-        wk  = r["wk"]
-        ref = str(r["refid_mcmc"])
-        if wk not in nadi_week:
-            nadi_week[wk] = {}
-        if ref not in nadi_week[wk]:
-            nadi_week[wk][ref] = []
-        nadi_week[wk][ref].append({
-            "pn":  str(r["program_name"])[:65],
-            "pr":  str(r["program"]),
-            "tp":  int(r["total_pax"]),
-            "at":  int(r["attended"]),
-            "st":  r["st"],
-            "sso": sso_label(r["requester_id"]),
-        })
 
-    zero_list = []
-    for _, r in ev[ev["st"] == "z"].iterrows():
-        zero_list.append({
-            "ref": str(r["refid_mcmc"]) if pd.notna(r["refid_mcmc"]) else "—",
-            "nm":  str(r["nadi_name"])  if pd.notna(r["nadi_name"])  else "—",
-            "s":   str(r["state"])      if pd.notna(r["state"])       else "—",
-            "pr":  str(r["program"]),
-            "pn":  str(r["program_name"])[:65],
-            "wk":  r["wk"],
-            "wl":  r["wl"],
-            "tp":  int(r["total_pax"]),
-            "sso": sso_label(r["requester_id"]),
-        })
+# ─────────────────────────────────────────────────────────────────────────────
+# Save helpers
+# ─────────────────────────────────────────────────────────────────────────────
 
-    active_refs = list(ev["refid_mcmc"].dropna().unique())
+def save_raw(df: pd.DataFrame, path: str):
+    df.to_csv(path, index=False)
+    print(f"Raw saved  → {path}  ({len(df):,} rows)")
 
-    return {
-        "cat":         info.get("cat", ""),
-        "mod":         info.get("mod", ""),
-        "weeks":       weeks_meta,
-        "nw":          nadi_week,
-        "zero":        zero_list,
-        "active_refs": active_refs,
-    }
+
+def _sanitize(frame: pd.DataFrame) -> pd.DataFrame:
+    """Strip control characters that cause openpyxl to reject cells."""
+    frame = frame.copy()
+    for col in frame.select_dtypes(include="object").columns:
+        frame[col] = frame[col].apply(
+            lambda v: _ILLEGAL_CHARS.sub("", v) if isinstance(v, str) else v
+        )
+    return frame
+
+
+def save_to_excel(path: str, sheets: dict):
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        for sheet_name, frame in sheets.items():
+            _sanitize(frame).to_excel(
+                writer,
+                sheet_name=sheet_name[:31],
+                index=isinstance(frame.index, pd.MultiIndex) or bool(frame.index.name),
+            )
+    print(f"Excel saved → {path}  ({len(sheets)} sheets)")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Main
+# ─────────────────────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    df_all_sites = fetch_all_sites()
+
+    for sub_id, sub_label in SUBCATEGORIES.items():
+        print(f"\n{'='*60}")
+        print(f"Subcategory {sub_id}: {sub_label}")
+        print(f"{'='*60}")
+
+        df = fetch(sub_id)
+        if df.empty:
+            print("No data — skipping.")
+            continue
+
+        prefix = f"nes_sub{sub_id:02d}_{sub_label}_{date.today().strftime('%Y%m%d')}"
+
+        # 1. Raw participant-level CSV (includes all event_site_* columns)
+        save_raw(df, f"{prefix}_raw.csv")
+
+        # 2. Monthly pivot Excel (one sheet per month + All)
+        sheets = build_monthly_sheets(df, df_all_sites)
+        save_to_excel(f"{prefix}.xlsx", sheets)
