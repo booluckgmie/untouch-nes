@@ -30,21 +30,12 @@ jobs:
 
       - name: Generate static data
               env:
-                # Pass raw secrets to temporary variables
-                RAW_HOST: ${{ secrets.DB_HOST }}
-                RAW_PORT: ${{ secrets.DB_PORT }}
-                RAW_USER: ${{ secrets.DB_USER }}
-                RAW_PASS: ${{ secrets.DB_PASSWORD }}
-                RAW_NAME: ${{ secrets.DB_NAME }}
-              run: |
-                # Use Python to strip whitespace and export clean variables
-                export DB_HOST=$(python3 -c "import os; print(os.environ['RAW_HOST'].strip())")
-                export DB_PORT=$(python3 -c "import os; print(os.environ['RAW_PORT'].strip())")
-                export DB_USER=$(python3 -c "import os; print(os.environ['RAW_USER'].strip())")
-                export DB_PASSWORD=$(python3 -c "import os; print(os.environ['RAW_PASS'].strip())")
-                export DB_NAME=$(python3 -c "import os; print(os.environ['RAW_NAME'].strip())")
-                
-                python scripts/gen_static.py
+                DB_HOST:     ${{ secrets.DB_HOST }}
+                DB_PORT:     ${{ secrets.DB_PORT }}
+                DB_USER:     ${{ secrets.DB_USER }}
+                DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+                DB_NAME:     ${{ secrets.DB_NAME }}
+              run: python scripts/gen_static.py
 
       - name: Commit & push if data changed
         run: |
