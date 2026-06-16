@@ -83,6 +83,10 @@ table.t-mo{min-width:max-content}
 /* Monthly table — double header rows */
 table.t-mo thead tr:nth-child(1) th{position:sticky;top:0;z-index:3;background:#fafaf8;white-space:nowrap}
 table.t-mo thead tr:nth-child(2) th{position:sticky;top:26px;z-index:3;background:#f3f2f0;white-space:nowrap;border-bottom:2px solid var(--line)}
+/* Triple-header (sub-pillar grouping) */
+table.t-mo.t-pillar thead tr:nth-child(1) th{position:sticky;top:0;z-index:3;background:#fafaf8;white-space:nowrap}
+table.t-mo.t-pillar thead tr:nth-child(2) th{position:sticky;top:26px;z-index:3;background:#f3f2f0;white-space:nowrap;border-bottom:none}
+table.t-mo.t-pillar thead tr:nth-child(3) th{position:sticky;top:52px;z-index:3;background:#ece9e4;white-space:nowrap;border-bottom:2px solid var(--line)}
 table.t-mo thead th.f-ref{text-align:left;position:sticky;left:0;z-index:5;background:#fafaf8;min-width:90px;max-width:90px}
 table.t-mo thead th.f-nm {text-align:left;position:sticky;left:90px;z-index:5;background:#fafaf8;min-width:150px;max-width:150px}
 table.t-mo thead th.f-st {text-align:left;position:sticky;left:240px;z-index:5;background:#fafaf8;min-width:90px;max-width:90px;border-right:2px solid var(--line)}
@@ -566,7 +570,7 @@ function buildShell(id){
       <div class="page-hdr">
         <div><div class="page-title"><span class="${nd.cat==='NADI4U'?'cat-4u':'cat-2u'}">${nd.cat}</span>${ce(lbl)}</div>
         <div class="page-sub">${nd.progs.map(p=>ce(p)).join(' &nbsp;·&nbsp; ')}</div></div>
-        <div class="page-meta">Updated ${d.fetched||'today'}<br>${d.start_date?`${d.start_date} → ${d.end_date||'present'}`:'All dates'}</div>
+        <div class="page-meta">Fetched: ${d.fetched||'today'}<br>Refreshes daily &nbsp;·&nbsp; ${d.start_date?`${d.start_date} → ${d.end_date||'present'}`:'All dates'}</div>
       </div>
     </div>
     <div class="tab-bar">
@@ -602,6 +606,7 @@ function renderNadi(d){
         <input id="nq" placeholder="Search NADI name or ref ID…" oninput="fN2()">
         <select id="nst" onchange="fN2()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
         <select id="nsf" onchange="fN2()"><option value="">All status</option><option value="a">Active</option><option value="p">Partial</option><option value="u">Untouched</option></select>
+        <select id="nprog" onchange="fN2()"><option value="">All programs</option>${nd.progs.map((p,k)=>`<option value="${k}">${ce(p)}</option>`).join('')}</select>
         <span class="fc" id="nfc"></span>
       </div>
       <div class="tbl-wrap"><table><thead><tr>
@@ -616,9 +621,12 @@ function fN2(){
   const q=(document.getElementById('nq')||{value:''}).value.toLowerCase();
   const st=(document.getElementById('nst')||{value:''}).value;
   const sf=(document.getElementById('nsf')||{value:''}).value;
+  const np=(document.getElementById('nprog')||{value:''}).value;
   const f=tRowsAll.filter(r=>{
     if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
-    if(st&&r.state!==st)return false;if(sf&&r.st!==sf)return false;return true;
+    if(st&&r.state!==st)return false;if(sf&&r.st!==sf)return false;
+    if(np&&!r.pr[np])return false;
+    return true;
   });
   if(_nSort.k){const k=_nSort.k,d=_nSort.d;f.sort((a,b)=>{const av=a[k],bv=b[k];return(typeof av==='number'?av-bv:String(av||'').localeCompare(String(bv||'')))*d;});}
   document.getElementById('nfc').textContent=fN(f.length)+' sites';
@@ -664,23 +672,59 @@ function renderMonthly(d){
   const pillars=(PILL_CFG[d.sub_id]||[]).length
     ?(PILL_CFG[d.sub_id]).map(pl=>({name:pl.name,pis:pl.progs.map(pn=>progs.indexOf(pn)).filter(i=>i>=0)}))
     :null;
-  const colDefs=pillars||progs.map((p,pi)=>({name:p,pis:[pi]}));
+  const piToPl={};
+  if(pillars) pillars.forEach((pl,pli)=>pl.pis.forEach(pi=>{piToPl[pi]=pli;}));
+  const displayPis=pillars?pillars.flatMap(pl=>pl.pis):progs.map((_,pi)=>pi);
 
   window._mAMap=aMap; window._mProgs=progs; window._mMonths=months;
   window._mCol=col; window._mMH=mH; window._mProgColors=PROG_COLORS;
   window._mDispMonths=dispMonths; window._mMTot=mTot; window._mMaxT=maxT;
-  window._mPillars=pillars; window._mColDefs=colDefs;
+  window._mPillars=pillars; window._mDisplayPis=displayPis; window._mPiToPl=piToPl;
 
-  // Row 1: column (pillar or program) names spanning 2 cols each
-  const hdr1=colDefs.map((col2,ci)=>{
-    const pc=PROG_COLORS[ci%PROG_COLORS.length];
-    return `<th colspan="2" data-pi="${ci}" style="text-align:center;padding:5px 6px;font-size:9px;font-weight:700;color:${pc};border-left:1px solid var(--line2);white-space:nowrap" title="${ce(col2.name)}">${ce(col2.name.length>14?col2.name.slice(0,13)+'…':col2.name)}</th>`;
-  }).join('');
-  // Row 2: Ev/Pax sub-headers per column
-  const hdr2=colDefs.map((_,ci)=>
-    `<th data-pi="${ci}" style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3);border-left:1px solid var(--line2)">Ev</th>`+
-    `<th data-pi="${ci}" style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3)">Pax</th>`
-  ).join('');
+  // Build table headers — 3-level when pillars, 2-level otherwise
+  const RS=pillars?3:2;
+  let theadInner;
+  if(pillars){
+    const hPillar=pillars.map((pl,pli)=>{
+      const pc=PROG_COLORS[pli%PROG_COLORS.length];
+      return `<th colspan="${pl.pis.length*2}" data-pl="${pli}" style="text-align:center;padding:4px 6px;font-size:9px;font-weight:700;color:${pc};border-left:1px solid var(--line2)">${ce(pl.name)}</th>`;
+    }).join('');
+    const hProg=displayPis.map(pi=>{
+      const pli=piToPl[pi];const pc=PROG_COLORS[pli%PROG_COLORS.length];const pn=progs[pi]||'';
+      return `<th colspan="2" data-pi="${pi}" data-pl="${pli}" style="text-align:center;padding:4px 6px;font-size:8px;font-weight:700;color:${pc};border-left:1px solid var(--line2);white-space:nowrap" title="${ce(pn)}">${ce(pn.length>12?pn.slice(0,11)+'…':pn)}</th>`;
+    }).join('');
+    const hEP=displayPis.map(pi=>{
+      const pli=piToPl[pi];
+      return `<th data-pi="${pi}" data-pl="${pli}" style="text-align:center;padding:2px 5px;font-size:8px;color:var(--t3);border-left:1px solid var(--line2)">Ev</th><th data-pi="${pi}" data-pl="${pli}" style="text-align:center;padding:2px 5px;font-size:8px;color:var(--t3)">Pax</th>`;
+    }).join('');
+    theadInner=`<tr>
+      <th class="f-ref" rowspan="3" style="vertical-align:bottom">Ref ID</th>
+      <th id="mhNm" class="f-nm" rowspan="3" style="vertical-align:bottom;cursor:pointer;user-select:none" onclick="mSort('nm')">NADI site</th>
+      <th id="mhState" class="f-st" rowspan="3" style="vertical-align:bottom;cursor:pointer;user-select:none" onclick="mSort('state')">State</th>
+      ${hPillar}
+      <th colspan="2" rowspan="3" style="text-align:center;padding:5px 6px;font-size:10px;font-weight:700;border-left:2px solid var(--line);white-space:nowrap;vertical-align:middle"><span id="mhTe" style="cursor:pointer;user-select:none" onclick="mSort('te')">Total Ev</span><br><span id="mhTp" style="cursor:pointer;user-select:none" onclick="mSort('tp')">Pax</span></th>
+    </tr><tr>${hProg}</tr><tr>${hEP}</tr>`;
+  } else {
+    const hdr1=displayPis.map(pi=>{
+      const pc=PROG_COLORS[pi%PROG_COLORS.length];const pn=progs[pi]||'';
+      return `<th colspan="2" data-pi="${pi}" style="text-align:center;padding:5px 6px;font-size:9px;font-weight:700;color:${pc};border-left:1px solid var(--line2);white-space:nowrap" title="${ce(pn)}">${ce(pn.length>14?pn.slice(0,13)+'…':pn)}</th>`;
+    }).join('');
+    const hdr2=displayPis.map(pi=>
+      `<th data-pi="${pi}" style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3);border-left:1px solid var(--line2)">Ev</th><th data-pi="${pi}" style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3)">Pax</th>`
+    ).join('');
+    theadInner=`<tr>
+      <th class="f-ref" rowspan="2" style="vertical-align:bottom;border-bottom:2px solid var(--line)">Ref ID</th>
+      <th id="mhNm" class="f-nm" rowspan="2" style="vertical-align:bottom;border-bottom:2px solid var(--line);cursor:pointer;user-select:none" onclick="mSort('nm')">NADI site</th>
+      <th id="mhState" class="f-st" rowspan="2" style="vertical-align:bottom;border-bottom:2px solid var(--line);cursor:pointer;user-select:none" onclick="mSort('state')">State</th>
+      ${hdr1}
+      <th colspan="2" style="text-align:center;padding:5px 6px;font-size:10px;font-weight:700;border-left:2px solid var(--line);white-space:nowrap"><span id="mhTe" style="cursor:pointer;user-select:none" onclick="mSort('te')">Total Ev</span> / <span id="mhTp" style="cursor:pointer;user-select:none" onclick="mSort('tp')">Pax</span></th>
+    </tr><tr>
+      ${hdr2}
+      <th style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3);border-left:2px solid var(--line)">Ev</th>
+      <th style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3)">Pax</th>
+    </tr>`;
+  }
+  const progOpts=displayPis.map(pi=>{const pn=progs[pi]||'prog'+pi;return `<option value="${pi}">${ce(pn.length>22?pn.slice(0,21)+'…':pn)}</option>`;}).join('');
 
   document.getElementById('tB').innerHTML=`
     <div class="kpi-row">
@@ -707,26 +751,13 @@ function renderMonthly(d){
         <input id="mq" placeholder="Search NADI name or ref…" oninput="fM()">
         <select id="mst" onchange="fM()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
         <select id="msf" onchange="fM()"><option value="">All NADI</option><option value="a">Active only</option><option value="u">Untouched only</option></select>
-        <select id="mprog" onchange="fM()"><option value="">All ${pillars?'pillars':'programs'}</option>${colDefs.map((col2,ci)=>`<option value="${ci}">${ce(col2.name.length>22?col2.name.slice(0,21)+'…':col2.name)}</option>`).join('')}</select>
+        <select id="mprog" onchange="fM()"><option value="">All programs</option>${progOpts}</select>
         <span class="fc" id="mfc"></span>
         <button id="exportBtn" class="export-btn" onclick="exportXlsx()" title="Download MCMC/TM Data Smart Services report">⬇ Export Excel</button>
       </div>
       <div class="tbl-wrap">
-        <table class="t-mo" id="mTable">
-          <thead>
-            <tr>
-              <th class="f-ref" rowspan="2" style="vertical-align:bottom;border-bottom:2px solid var(--line)">Ref ID</th>
-              <th id="mhNm" class="f-nm" rowspan="2" style="vertical-align:bottom;border-bottom:2px solid var(--line);cursor:pointer;user-select:none" onclick="mSort('nm')">NADI site</th>
-              <th id="mhState" class="f-st" rowspan="2" style="vertical-align:bottom;border-bottom:2px solid var(--line);cursor:pointer;user-select:none" onclick="mSort('state')">State</th>
-              ${hdr1}
-              <th colspan="2" style="text-align:center;padding:5px 6px;font-size:10px;font-weight:700;border-left:2px solid var(--line);white-space:nowrap"><span id="mhTe" style="cursor:pointer;user-select:none" onclick="mSort('te')">Total Ev</span> / <span id="mhTp" style="cursor:pointer;user-select:none" onclick="mSort('tp')">Pax</span></th>
-            </tr>
-            <tr>
-              ${hdr2}
-              <th style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3);border-left:2px solid var(--line)">Ev</th>
-              <th style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3)">Pax</th>
-            </tr>
-          </thead>
+        <table class="t-mo${pillars?' t-pillar':''}" id="mTable">
+          <thead>${theadInner}</thead>
           <tbody id="mTb"></tbody>
           <tfoot><tr id="mFoot"></tr></tfoot>
         </table>
@@ -740,12 +771,15 @@ function renderMonthly(d){
     td.style.cssText='font-size:10px;color:var(--t3);font-weight:600;text-transform:uppercase;';
     foot.appendChild(td);
   });
-  colDefs.forEach((_,ci)=>{
-    const pc=PROG_COLORS[ci%PROG_COLORS.length];
-    const te=document.createElement('td');te.id='mft_pe'+ci;te.dataset.pi=ci;
+  displayPis.forEach(pi=>{
+    const pli=piToPl[pi]!==undefined?piToPl[pi]:-1;
+    const pc=PROG_COLORS[(pli>=0?pli:pi)%PROG_COLORS.length];
+    const te=document.createElement('td');te.id='mft_pe'+pi;te.dataset.pi=pi;
+    if(pli>=0)te.dataset.pl=pli;
     te.style.cssText='text-align:center;font-size:10px;font-weight:600;color:'+pc+';border-left:1px solid var(--line2);';
     foot.appendChild(te);
-    const tp=document.createElement('td');tp.id='mft_pp'+ci;tp.dataset.pi=ci;
+    const tp=document.createElement('td');tp.id='mft_pp'+pi;tp.dataset.pi=pi;
+    if(pli>=0)tp.dataset.pl=pli;
     tp.style.cssText='text-align:center;font-size:10px;color:var(--t2);';
     foot.appendChild(tp);
   });
@@ -834,32 +868,40 @@ function fM(){
   const elTe=document.getElementById('mhTe');if(elTe)elTe.textContent='Total Ev'+(_mSort.k==='te'?(_mSort.d>0?' ↑':' ↓'):'');
   const elTp=document.getElementById('mhTp');if(elTp)elTp.textContent='Pax'+(_mSort.k==='tp'?(_mSort.d>0?' ↑':' ↓'):'');
 
-  const colDefs=window._mColDefs||progs.map((_,pi)=>({name:progs[pi],pis:[pi]}));
-  const nc=colDefs.length;
-  const footEv=new Array(nc).fill(0);
-  const footPx=new Array(nc).fill(0);
+  const displayPis=window._mDisplayPis||progs.map((_,pi)=>pi);
+  const piToPl=window._mPiToPl||{};
+  const footEv={},footPx={};
+  displayPis.forEach(pi=>{footEv[pi]=0;footPx[pi]=0;});
   let grandEv=0, grandPx=0;
 
-  // Column filter (sp is now a colDef index — any prog in that column must have events)
+  // sp filter: hide rows where selected program has no events
   const _spFilter=(r)=>{
     if(sp==='')return true;
-    const colPis=(colDefs[parseInt(sp)]||{pis:[]}).pis;
-    return colPis.some(pi=>{const ev=(((aMap[r.i]||{}).pr||{})[String(pi)]||{}).ev||[];return dataMonthIdx!==null?(ev[dataMonthIdx]||0)>0:ev.some(v=>v>0);});
+    const pi=parseInt(sp);
+    const ev=(((aMap[r.i]||{}).pr||{})[String(pi)]||{}).ev||[];
+    return dataMonthIdx!==null?(ev[dataMonthIdx]||0)>0:(mi?mi.some(j=>(ev[j]||0)>0):ev.some(v=>v>0));
   };
   const fF=f.filter(_spFilter);
 
   document.getElementById('mTb').innerHTML=fF.map(r=>{
     const a=aMap[r.i]||{tot:[],pax:[],pr:{}};
-    const colEv=colDefs.map(col2=>col2.pis.reduce((s,pi)=>{const ev=(a.pr[String(pi)]||{}).ev||[];return s+(dataMonthIdx!==null?ev[dataMonthIdx]||0:mi?mi.reduce((s2,j)=>s2+(ev[j]||0),0):ev.reduce((s2,v)=>s2+(v||0),0));},0));
-    const colPx=colDefs.map(col2=>col2.pis.reduce((s,pi)=>{const px=(a.pr[String(pi)]||{}).px||[];return s+(dataMonthIdx!==null?px[dataMonthIdx]||0:mi?mi.reduce((s2,j)=>s2+(px[j]||0),0):px.reduce((s2,v)=>s2+(v||0),0));},0));
-    const totEv=colEv.reduce((s,v)=>s+v,0);
-    const totPx=colPx.reduce((s,v)=>s+v,0);
+    const perEv={},perPx={};
+    displayPis.forEach(pi=>{
+      const pr=(a.pr[String(pi)]||{});
+      const evArr=pr.ev||[],pxArr=pr.px||[];
+      perEv[pi]=dataMonthIdx!==null?(evArr[dataMonthIdx]||0):(mi?mi.reduce((s,j)=>s+(evArr[j]||0),0):evArr.reduce((s,v)=>s+(v||0),0));
+      perPx[pi]=dataMonthIdx!==null?(pxArr[dataMonthIdx]||0):(mi?mi.reduce((s,j)=>s+(pxArr[j]||0),0):pxArr.reduce((s,v)=>s+(v||0),0));
+    });
+    const totEv=displayPis.reduce((s,pi)=>s+perEv[pi],0);
+    const totPx=displayPis.reduce((s,pi)=>s+perPx[pi],0);
     grandEv+=totEv; grandPx+=totPx;
-    colEv.forEach((v,ci)=>{footEv[ci]+=v;}); colPx.forEach((v,ci)=>{footPx[ci]+=v;});
-    const cells=colDefs.map((_,ci)=>
-      `<td data-pi="${ci}" class="${hc(colEv[ci])}" onclick="event.stopPropagation();openPillarCell(${r.i},${ci})" style="text-align:center;border-left:1px solid var(--line2);font-weight:${colEv[ci]?600:400};cursor:pointer">${colEv[ci]?fN(colEv[ci]):'·'}</td>`+
-      `<td data-pi="${ci}" style="text-align:center;color:var(--t2);font-size:10px">${colPx[ci]?fN(colPx[ci]):'·'}</td>`
-    ).join('');
+    displayPis.forEach(pi=>{footEv[pi]+=perEv[pi];footPx[pi]+=perPx[pi];});
+    const cells=displayPis.map(pi=>{
+      const pli=piToPl[pi]!=null?piToPl[pi]:-1;
+      const plAttr=pli>=0?` data-pl="${pli}"`:'';
+      const ev=perEv[pi],px=perPx[pi];
+      return `<td data-pi="${pi}"${plAttr} class="${hc(ev)}" onclick="event.stopPropagation();openProgCell(${r.i},${pi})" style="text-align:center;border-left:1px solid var(--line2);font-weight:${ev?600:400};cursor:pointer">${ev?fN(ev):'·'}</td><td data-pi="${pi}"${plAttr} style="text-align:center;color:var(--t2);font-size:10px">${px?fN(px):'·'}</td>`;
+    }).join('');
     return `<tr onclick="openMoPanel(${r.i})" id="mi${r.i}" style="cursor:pointer">
       <td class="f-ref">${ce(r.ref)}</td>
       <td class="f-nm" title="${ce(r.nm)}"><div style="font-weight:${totEv?600:400};color:${totEv?'var(--t1)':'var(--t3)'};font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${ce(r.nm)}</div></td>
@@ -870,9 +912,9 @@ function fM(){
     </tr>`;
   }).join('');
 
-  colDefs.forEach((_,ci)=>{
-    const ee=document.getElementById('mft_pe'+ci);if(ee)ee.textContent=footEv[ci]?fN(footEv[ci]):'—';
-    const ep=document.getElementById('mft_pp'+ci);if(ep)ep.textContent=footPx[ci]?fN(footPx[ci]):'—';
+  displayPis.forEach(pi=>{
+    const ee=document.getElementById('mft_pe'+pi);if(ee)ee.textContent=footEv[pi]?fN(footEv[pi]):'—';
+    const ep=document.getElementById('mft_pp'+pi);if(ep)ep.textContent=footPx[pi]?fN(footPx[pi]):'—';
   });
   const ge=document.getElementById('mft_gev');if(ge)ge.textContent=grandEv?fN(grandEv):'—';
   const gp=document.getElementById('mft_gpx');if(gp)gp.textContent=grandPx?fN(grandPx):'—';
