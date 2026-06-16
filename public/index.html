@@ -564,13 +564,14 @@ function buildShell(id){
   const d=window._D,nd=d.nadi,col=COL[nd.mod]||'#555',lbl=nd.mod==='LifelongLearning'?'Lifelong Learning':nd.mod;
   const s=SUBS[id]||{};const totZ=d.weekly.zero.length;
   _computeFilteredMI();rebuildTRowsAll();
+  const _nxr=(f=>{const m=/(\d+)\s+(\w+)\s+(\d+),\s+(\d+):(\d+)/.exec(f||'');if(!m)return'—';const D=new Date(+m[3],{Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11}[m[2]]||0,+m[1],+m[4],+m[5]+5);return m[1]+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][D.getMonth()]+' '+D.getFullYear()+', '+String(D.getHours()).padStart(2,'0')+':'+String(D.getMinutes()).padStart(2,'0');})(d.fetched);
   document.getElementById('main').innerHTML=`
     <div class="top-bar">
       <div class="bc">NES &rsaquo; <a onclick="gOv(document.getElementById('navOv'))">Overview</a> &rsaquo; ${nd.cat} &rsaquo; <span>${ce(lbl)}</span></div>
       <div class="page-hdr">
         <div><div class="page-title"><span class="${nd.cat==='NADI4U'?'cat-4u':'cat-2u'}">${nd.cat}</span>${ce(lbl)}</div>
         <div class="page-sub">${nd.progs.map(p=>ce(p)).join(' &nbsp;·&nbsp; ')}</div></div>
-        <div class="page-meta">Fetched: ${d.fetched||'today'}<br>Refreshes daily &nbsp;·&nbsp; ${d.start_date?`${d.start_date} → ${d.end_date||'present'}`:'All dates'}</div>
+        <div class="page-meta">Fetched: ${d.fetched||'today'}<br>Next refresh: ${_nxr} &nbsp;·&nbsp; ${d.start_date?`${d.start_date} → ${d.end_date||'present'}`:'All dates'}</div>
       </div>
     </div>
     <div class="tab-bar">
