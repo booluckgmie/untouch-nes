@@ -655,19 +655,31 @@ function renderMonthly(d){
   const mTot=(_filteredMI||months.map((_,i)=>i)).map(mi=>(sm.rows||[]).reduce((s,r)=>s+((Array.isArray(r[1])?r[1][mi]:0)||0),0));
   const maxT=Math.max(...mTot,1);
 
+  // Sub-pillar config: group programs into named pillars per subcategory
+  const PILL_CFG={2:[
+    {name:'NURTURE',    progs:['CYBERSECURITY','EKELAS','NADI TUISYEN RAKYAT']},
+    {name:'SKILLFORGE', progs:['ESPORT','MAHIR']},
+    {name:'TINYTECHIES',progs:['NADI-TinyTechies']},
+  ]};
+  const pillars=(PILL_CFG[d.sub_id]||[]).length
+    ?(PILL_CFG[d.sub_id]).map(pl=>({name:pl.name,pis:pl.progs.map(pn=>progs.indexOf(pn)).filter(i=>i>=0)}))
+    :null;
+  const colDefs=pillars||progs.map((p,pi)=>({name:p,pis:[pi]}));
+
   window._mAMap=aMap; window._mProgs=progs; window._mMonths=months;
   window._mCol=col; window._mMH=mH; window._mProgColors=PROG_COLORS;
   window._mDispMonths=dispMonths; window._mMTot=mTot; window._mMaxT=maxT;
+  window._mPillars=pillars; window._mColDefs=colDefs;
 
-  // Row 1: program names spanning 2 cols each
-  const hdr1=progs.map((p,pi)=>{
-    const pc=PROG_COLORS[pi%PROG_COLORS.length];
-    return `<th colspan="2" data-pi="${pi}" style="text-align:center;padding:5px 6px;font-size:9px;font-weight:700;color:${pc};border-left:1px solid var(--line2);white-space:nowrap" title="${ce(p)}">${ce(p.length>14?p.slice(0,13)+'…':p)}</th>`;
+  // Row 1: column (pillar or program) names spanning 2 cols each
+  const hdr1=colDefs.map((col2,ci)=>{
+    const pc=PROG_COLORS[ci%PROG_COLORS.length];
+    return `<th colspan="2" data-pi="${ci}" style="text-align:center;padding:5px 6px;font-size:9px;font-weight:700;color:${pc};border-left:1px solid var(--line2);white-space:nowrap" title="${ce(col2.name)}">${ce(col2.name.length>14?col2.name.slice(0,13)+'…':col2.name)}</th>`;
   }).join('');
-  // Row 2: Ev/Pax sub-headers per program + Total Ev/Pax
-  const hdr2=progs.map((_,pi)=>
-    `<th data-pi="${pi}" style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3);border-left:1px solid var(--line2)">Ev</th>`+
-    `<th data-pi="${pi}" style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3)">Pax</th>`
+  // Row 2: Ev/Pax sub-headers per column
+  const hdr2=colDefs.map((_,ci)=>
+    `<th data-pi="${ci}" style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3);border-left:1px solid var(--line2)">Ev</th>`+
+    `<th data-pi="${ci}" style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3)">Pax</th>`
   ).join('');
 
   document.getElementById('tB').innerHTML=`
@@ -695,7 +707,7 @@ function renderMonthly(d){
         <input id="mq" placeholder="Search NADI name or ref…" oninput="fM()">
         <select id="mst" onchange="fM()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
         <select id="msf" onchange="fM()"><option value="">All NADI</option><option value="a">Active only</option><option value="u">Untouched only</option></select>
-        <select id="mprog" onchange="fM()"><option value="">All programs</option>${progs.map((p,pi)=>`<option value="${pi}">${ce(p.length>22?p.slice(0,21)+'…':p)}</option>`).join('')}</select>
+        <select id="mprog" onchange="fM()"><option value="">All ${pillars?'pillars':'programs'}</option>${colDefs.map((col2,ci)=>`<option value="${ci}">${ce(col2.name.length>22?col2.name.slice(0,21)+'…':col2.name)}</option>`).join('')}</select>
         <span class="fc" id="mfc"></span>
         <button id="exportBtn" class="export-btn" onclick="exportXlsx()" title="Download MCMC/TM Data Smart Services report">⬇ Export Excel</button>
       </div>
@@ -728,12 +740,12 @@ function renderMonthly(d){
     td.style.cssText='font-size:10px;color:var(--t3);font-weight:600;text-transform:uppercase;';
     foot.appendChild(td);
   });
-  progs.forEach((_,pi)=>{
-    const pc=PROG_COLORS[pi%PROG_COLORS.length];
-    const te=document.createElement('td');te.id='mft_pe'+pi;te.dataset.pi=pi;
+  colDefs.forEach((_,ci)=>{
+    const pc=PROG_COLORS[ci%PROG_COLORS.length];
+    const te=document.createElement('td');te.id='mft_pe'+ci;te.dataset.pi=ci;
     te.style.cssText='text-align:center;font-size:10px;font-weight:600;color:'+pc+';border-left:1px solid var(--line2);';
     foot.appendChild(te);
-    const tp=document.createElement('td');tp.id='mft_pp'+pi;tp.dataset.pi=pi;
+    const tp=document.createElement('td');tp.id='mft_pp'+ci;tp.dataset.pi=ci;
     tp.style.cssText='text-align:center;font-size:10px;color:var(--t2);';
     foot.appendChild(tp);
   });
@@ -799,7 +811,6 @@ function fM(){
     if(st&&r.state!==st)return false;
     if(sf==='a'&&r.st==='u')return false;
     if(sf==='u'&&r.st!=='u')return false;
-    if(sp!==''){const prD=((aMap[r.i]||{}).pr||{})[sp];if(!prD)return false;const ev=prD.ev||[];const hasEv=dataMonthIdx!==null?(ev[dataMonthIdx]||0)>0:mi?mi.some(j=>(ev[j]||0)>0):ev.some(v=>v>0);if(!hasEv)return false;}
     return true;
   });
   if(_mSort.k){
@@ -823,23 +834,31 @@ function fM(){
   const elTe=document.getElementById('mhTe');if(elTe)elTe.textContent='Total Ev'+(_mSort.k==='te'?(_mSort.d>0?' ↑':' ↓'):'');
   const elTp=document.getElementById('mhTp');if(elTp)elTp.textContent='Pax'+(_mSort.k==='tp'?(_mSort.d>0?' ↑':' ↓'):'');
 
-  const footEv=new Array(np).fill(0);
-  const footPx=new Array(np).fill(0);
+  const colDefs=window._mColDefs||progs.map((_,pi)=>({name:progs[pi],pis:[pi]}));
+  const nc=colDefs.length;
+  const footEv=new Array(nc).fill(0);
+  const footPx=new Array(nc).fill(0);
   let grandEv=0, grandPx=0;
 
-  document.getElementById('mTb').innerHTML=f.map(r=>{
+  // Column filter (sp is now a colDef index — any prog in that column must have events)
+  const _spFilter=(r)=>{
+    if(sp==='')return true;
+    const colPis=(colDefs[parseInt(sp)]||{pis:[]}).pis;
+    return colPis.some(pi=>{const ev=(((aMap[r.i]||{}).pr||{})[String(pi)]||{}).ev||[];return dataMonthIdx!==null?(ev[dataMonthIdx]||0)>0:ev.some(v=>v>0);});
+  };
+  const fF=f.filter(_spFilter);
+
+  document.getElementById('mTb').innerHTML=fF.map(r=>{
     const a=aMap[r.i]||{tot:[],pax:[],pr:{}};
-    const mi=_filteredMI;
-    const dataMonthIdx=selMonth!==null?(mi?mi[selMonth]:selMonth):null;
-    const progEv=progs.map((_,pi)=>{const ev=((a.pr[String(pi)]||{}).ev||[]);if(dataMonthIdx!==null)return ev[dataMonthIdx]||0;return mi?mi.reduce((s,j)=>s+(ev[j]||0),0):ev.reduce((s,v)=>s+(v||0),0);});
-    const progPx=progs.map((_,pi)=>{const px=((a.pr[String(pi)]||{}).px||[]);if(dataMonthIdx!==null)return px[dataMonthIdx]||0;return mi?mi.reduce((s,j)=>s+(px[j]||0),0):px.reduce((s,v)=>s+(v||0),0);});
-    const totEv=progEv.reduce((s,v)=>s+v,0);
-    const totPx=progPx.reduce((s,v)=>s+v,0);
+    const colEv=colDefs.map(col2=>col2.pis.reduce((s,pi)=>{const ev=(a.pr[String(pi)]||{}).ev||[];return s+(dataMonthIdx!==null?ev[dataMonthIdx]||0:mi?mi.reduce((s2,j)=>s2+(ev[j]||0),0):ev.reduce((s2,v)=>s2+(v||0),0));},0));
+    const colPx=colDefs.map(col2=>col2.pis.reduce((s,pi)=>{const px=(a.pr[String(pi)]||{}).px||[];return s+(dataMonthIdx!==null?px[dataMonthIdx]||0:mi?mi.reduce((s2,j)=>s2+(px[j]||0),0):px.reduce((s2,v)=>s2+(v||0),0));},0));
+    const totEv=colEv.reduce((s,v)=>s+v,0);
+    const totPx=colPx.reduce((s,v)=>s+v,0);
     grandEv+=totEv; grandPx+=totPx;
-    progEv.forEach((v,pi)=>{footEv[pi]+=v;}); progPx.forEach((v,pi)=>{footPx[pi]+=v;});
-    const cells=progs.map((_,pi)=>
-      `<td data-pi="${pi}" class="${hc(progEv[pi])}" onclick="event.stopPropagation();openProgCell(${r.i},${pi})" style="text-align:center;border-left:1px solid var(--line2);font-weight:${progEv[pi]?600:400};cursor:pointer">${progEv[pi]?fN(progEv[pi]):'·'}</td>`+
-      `<td data-pi="${pi}" style="text-align:center;color:var(--t2);font-size:10px">${progPx[pi]?fN(progPx[pi]):'·'}</td>`
+    colEv.forEach((v,ci)=>{footEv[ci]+=v;}); colPx.forEach((v,ci)=>{footPx[ci]+=v;});
+    const cells=colDefs.map((_,ci)=>
+      `<td data-pi="${ci}" class="${hc(colEv[ci])}" onclick="event.stopPropagation();openPillarCell(${r.i},${ci})" style="text-align:center;border-left:1px solid var(--line2);font-weight:${colEv[ci]?600:400};cursor:pointer">${colEv[ci]?fN(colEv[ci]):'·'}</td>`+
+      `<td data-pi="${ci}" style="text-align:center;color:var(--t2);font-size:10px">${colPx[ci]?fN(colPx[ci]):'·'}</td>`
     ).join('');
     return `<tr onclick="openMoPanel(${r.i})" id="mi${r.i}" style="cursor:pointer">
       <td class="f-ref">${ce(r.ref)}</td>
@@ -851,9 +870,9 @@ function fM(){
     </tr>`;
   }).join('');
 
-  progs.forEach((_,pi)=>{
-    const ee=document.getElementById('mft_pe'+pi);if(ee)ee.textContent=footEv[pi]?fN(footEv[pi]):'—';
-    const ep=document.getElementById('mft_pp'+pi);if(ep)ep.textContent=footPx[pi]?fN(footPx[pi]):'—';
+  colDefs.forEach((_,ci)=>{
+    const ee=document.getElementById('mft_pe'+ci);if(ee)ee.textContent=footEv[ci]?fN(footEv[ci]):'—';
+    const ep=document.getElementById('mft_pp'+ci);if(ep)ep.textContent=footPx[ci]?fN(footPx[ci]):'—';
   });
   const ge=document.getElementById('mft_gev');if(ge)ge.textContent=grandEv?fN(grandEv):'—';
   const gp=document.getElementById('mft_gpx');if(gp)gp.textContent=grandPx?fN(grandPx):'—';
@@ -946,6 +965,46 @@ function openProgCell(nadi_idx, pi){
       <tbody>${mrows}</tbody>
       <tfoot><tr style="border-top:1px solid var(--line)"><td style="font-size:11px;font-weight:700;padding:5px 0">Total</td><td style="text-align:right;font-size:13px;font-weight:700;padding:5px 4px;color:${pc}">${totEv?fN(totEv):'—'}</td><td style="text-align:right;font-size:11px;padding:5px 8px;color:var(--t2)">${totPx?fN(totPx):'—'}</td></tr></tfoot>
     </table>`;
+  document.getElementById('panel').classList.add('open');
+  document.getElementById('ov2').classList.add('open');
+}
+
+function openPillarCell(nadi_idx,ci){
+  const d=window._D;if(!d)return;
+  const aMap=window._mAMap||{},months=window._mMonths||[],progs=window._mProgs||[];
+  const colDefs=window._mColDefs||[],PROG_COLORS=window._mProgColors||['#4c44b0','#0b7575','#0b7a58','#a05208','#1650a0'];
+  const mH=window._mMH||(m=>{const[mn,yr]=m.split(' ');return mn+"'"+yr.slice(2);});
+  const ni=NI[nadi_idx]||[],[ref,nm2,state]=ni;
+  const col2=colDefs[ci]||{name:'',pis:[]};
+  const pc=PROG_COLORS[ci%PROG_COLORS.length];
+  const a=aMap[nadi_idx]||{pr:{}};
+  const mi=_filteredMI;
+  const activeMths=mi||months.map((_,i)=>i);
+  const dispMonths=activeMths.map(i=>months[i]||'');
+  const evByMonth=activeMths.map(j=>col2.pis.reduce((s,pi)=>s+(((a.pr[String(pi)]||{}).ev||[])[j]||0),0));
+  const pxByMonth=activeMths.map(j=>col2.pis.reduce((s,pi)=>s+(((a.pr[String(pi)]||{}).px||[])[j]||0),0));
+  const totEv=evByMonth.reduce((s,v)=>s+(v||0),0),totPx=pxByMonth.reduce((s,v)=>s+(v||0),0);
+  const mrows=dispMonths.map((m,idx)=>{const ev=evByMonth[idx]||0,px=pxByMonth[idx]||0;
+    return `<tr><td style="font-size:11px;padding:3px 0;color:var(--t3)">${mH(m)}</td><td style="text-align:right;font-size:11px;padding:3px 4px;font-weight:${ev?700:400};color:${ev?pc:'var(--t3)'}">${ev?fN(ev):'—'}</td><td style="text-align:right;font-size:11px;padding:3px 8px;color:var(--t2)">${px?fN(px):'—'}</td></tr>`;
+  }).join('');
+  const progRows=col2.pis.map(pi=>{
+    const pr=a.pr[String(pi)]||{ev:[],px:[]};
+    const ev=activeMths.reduce((s,j)=>s+(((pr.ev||[])[j])||0),0),px=activeMths.reduce((s,j)=>s+(((pr.px||[])[j])||0),0);
+    return `<tr><td style="font-size:11px;padding:4px 0;color:${pc};font-weight:600">${ce(progs[pi]||'?')}</td><td style="text-align:right;font-size:11px;padding:4px 4px;font-weight:${ev?700:400};color:${ev?pc:'var(--t3)'}">${ev?fN(ev):'—'}</td><td style="text-align:right;font-size:11px;padding:4px 8px;color:var(--t2)">${px?fN(px):'—'}</td></tr>`;
+  }).join('');
+  document.getElementById('ptitle').textContent=nm2||ref;
+  document.getElementById('pref').textContent=(state||'')+' · '+ref;
+  document.getElementById('ptabs').innerHTML=`<span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:10px;background:${pc}22;color:${pc}">${ce(col2.name)}</span>`;
+  document.getElementById('pb').innerHTML=`
+    <div style="margin-bottom:${col2.pis.length>1?'12px':'0'}">
+      <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Events by month — ${ce(col2.name)}</div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr><th style="font-size:9px;color:var(--t3);text-align:left;padding:2px 0;font-weight:400">Month</th><th style="font-size:9px;color:var(--t3);text-align:right;padding:2px 4px;font-weight:400">Events</th><th style="font-size:9px;color:var(--t3);text-align:right;padding:2px 8px;font-weight:400">Pax</th></tr></thead>
+        <tbody>${mrows}</tbody>
+        <tfoot><tr style="border-top:1px solid var(--line)"><td style="font-size:11px;font-weight:700;padding:5px 0">Total</td><td style="text-align:right;font-size:13px;font-weight:700;padding:5px 4px;color:${pc}">${totEv?fN(totEv):'—'}</td><td style="text-align:right;font-size:11px;padding:5px 8px;color:var(--t2)">${totPx?fN(totPx):'—'}</td></tr></tfoot>
+      </table>
+    </div>
+    ${col2.pis.length>1?`<div><div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">By program</div><table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left;font-size:9px;color:var(--t3);padding:2px 0;font-weight:400">Program</th><th style="text-align:right;font-size:9px;color:var(--t3);padding:2px 4px;font-weight:400">Events</th><th style="text-align:right;font-size:9px;color:var(--t3);padding:2px 8px;font-weight:400">Pax</th></tr></thead><tbody>${progRows}</tbody></table></div>`:''}`;
   document.getElementById('panel').classList.add('open');
   document.getElementById('ov2').classList.add('open');
 }
