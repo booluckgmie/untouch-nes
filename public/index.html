@@ -191,9 +191,6 @@ table.t-mo tfoot td.f-st {position:sticky;left:240px;z-index:3;background:#fafaf
 .filter-apply:hover{opacity:.88}
 .filter-clr{margin-top:4px;width:100%;padding:4px;font-size:10px;background:none;border:1px solid var(--line);border-radius:6px;cursor:pointer;color:var(--t3)}
 .filter-clr:hover{border-color:var(--t2);color:var(--t1)}
-.export-btn{display:flex;align-items:center;gap:5px;padding:5px 12px;font-size:11px;font-weight:600;background:var(--green);color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;transition:opacity .15s}
-.export-btn:hover{opacity:.85}
-.export-btn:disabled{opacity:.5;cursor:not-allowed}
 /* MOBILE */
 .sb-toggle{display:none;position:fixed;top:10px;left:10px;z-index:200;width:38px;height:38px;border:1px solid var(--line);border-radius:8px;background:var(--card);cursor:pointer;align-items:center;justify-content:center;font-size:18px;color:var(--t1);box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .sb-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.32);z-index:149}
@@ -290,43 +287,6 @@ function toggleSb(){
 function closeSb(){
   document.querySelector('.sb').classList.remove('open');
   const bd=document.getElementById('sbBd');if(bd)bd.classList.remove('open');
-}
-
-async function exportXlsx(){
-  const btn=document.getElementById('exportBtn');
-  if(!curSub||!window._D){return;}
-  if(btn){btn.disabled=true;btn.textContent='⏳ Generating…';}
-  try{
-    const d=window._D,sm=d.monthly,months=sm.months||[];
-    const MN={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-    const monthMap={};months.forEach((m,i)=>{const mn=(m||'').split(' ')[0].slice(0,3);if(mn in MN)monthMap[i]=MN[mn];});
-    const STATES=['JOHOR','KEDAH','KELANTAN','MELAKA','NEGERI SEMBILAN','PAHANG','PERAK','PERLIS',
-      'PULAU PINANG','SABAH','SARAWAK','SELANGOR','TERENGGANU','W.P KUALA LUMPUR','W.P LABUAN','W.P PUTRAJAYA'];
-    const stateEv={};STATES.forEach(s=>stateEv[s]=new Array(12).fill(0));
-    const filtSet=new Set((window._filteredRows||[]).map(r=>r.i));
-    const sp=(document.getElementById('mprog')||{value:''}).value;
-    const mi=_filteredMI;
-    const dataMonthIdx=selMonth!==null?(mi?mi[selMonth]:selMonth):null;
-    const activeMonthIdxs=dataMonthIdx!==null?[dataMonthIdx]:mi?mi:months.map((_,i)=>i);
-    (sm.rows||[]).forEach(row=>{
-      if(window._filteredRows&&!filtSet.has(row[0]))return;
-      const ni=NI[row[0]];if(!ni)return;
-      const state=String(ni[2]||'').toUpperCase().trim();if(!(state in stateEv))return;
-      const evArr=sp!==''?((row[3]||{})[sp]||{}).ev||[]:Array.isArray(row[1])?row[1]:[];
-      activeMonthIdxs.forEach(di=>{const mo=monthMap[di];if(mo!==undefined)stateEv[state][mo]+=(evArr[di]||0);});
-    });
-    const resp=await fetch('/data/template_report.xlsx');if(!resp.ok)throw new Error('Template not found');
-    const buf=new Uint8Array(await resp.arrayBuffer());
-    const wb=XLSX.read(buf,{type:'array',cellStyles:true,bookSST:true});
-    const ws=wb.Sheets[wb.SheetNames[0]];
-    const sc=(r,c,v)=>{const addr=XLSX.utils.encode_cell({r:r-1,c:c-1});const cur=ws[addr]||{};ws[addr]={...cur,v:v||null,t:v?'n':'z'};};
-    STATES.forEach((state,si)=>{const rowNum=6+si,ev=stateEv[state];let tot=0;for(let mo=0;mo<12;mo++){sc(rowNum,3+mo,ev[mo]||null);tot+=ev[mo];}sc(rowNum,15,tot||null);});
-    let grand=0;for(let mo=0;mo<12;mo++){const t=STATES.reduce((s,st)=>s+stateEv[st][mo],0);sc(22,3+mo,t||null);grand+=t;}
-    sc(22,15,grand||null);sc(23,3,grand||null);
-    const info=SUBS[curSub]||{};
-    XLSX.writeFile(wb,`NES_${info.mod||'Report'}_${new Date().toISOString().slice(0,10)}.xlsx`,{bookType:'xlsx',cellStyles:true,bookSST:true});
-  }catch(e){alert('Export failed: '+e.message);}
-  finally{if(btn){btn.disabled=false;btn.textContent='⬇ Export Excel';}}
 }
 
 async function boot(){
@@ -608,6 +568,7 @@ function renderNadi(d){
         <select id="nst" onchange="fN2()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
         <select id="nsf" onchange="fN2()"><option value="">All status</option><option value="a">Active</option><option value="p">Partial</option><option value="u">Untouched</option></select>
         <select id="nprog" onchange="fN2()"><option value="">All programs</option>${nd.progs.map((p,k)=>`<option value="${k}">${ce(p)}</option>`).join('')}</select>
+        <input id="ntpmin" type="number" min="0" placeholder="Min pax" style="width:80px" oninput="fN2()">
         <span class="fc" id="nfc"></span>
       </div>
       <div class="tbl-wrap"><table><thead><tr>
@@ -623,10 +584,12 @@ function fN2(){
   const st=(document.getElementById('nst')||{value:''}).value;
   const sf=(document.getElementById('nsf')||{value:''}).value;
   const np=(document.getElementById('nprog')||{value:''}).value;
+  const ntpmin=parseInt((document.getElementById('ntpmin')||{value:''}).value)||0;
   const f=tRowsAll.filter(r=>{
     if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
     if(st&&r.state!==st)return false;if(sf&&r.st!==sf)return false;
     if(np&&!r.pr[np])return false;
+    if(ntpmin>0 && r.tp<ntpmin) return false;
     return true;
   });
   if(_nSort.k){const k=_nSort.k,d=_nSort.d;f.sort((a,b)=>{const av=a[k],bv=b[k];return(typeof av==='number'?av-bv:String(av||'').localeCompare(String(bv||'')))*d;});}
@@ -753,8 +716,8 @@ function renderMonthly(d){
         <select id="mst" onchange="fM()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
         <select id="msf" onchange="fM()"><option value="">All NADI</option><option value="a">Active only</option><option value="u">Untouched only</option></select>
         <select id="mprog" onchange="fM()"><option value="">All programs</option>${progOpts}</select>
+        <input id="mtpmin" type="number" min="0" placeholder="Min pax" style="width:80px" oninput="fM()">
         <span class="fc" id="mfc"></span>
-        <button id="exportBtn" class="export-btn" onclick="exportXlsx()" title="Download MCMC/TM Data Smart Services report">⬇ Export Excel</button>
       </div>
       <div class="tbl-wrap">
         <table class="t-mo${pillars?' t-pillar':''}" id="mTable">
@@ -832,6 +795,7 @@ function fM(){
   const st=(document.getElementById('mst')||{value:''}).value;
   const sf=(document.getElementById('msf')||{value:''}).value;
   const sp=(document.getElementById('mprog')||{value:''}).value;
+  const mtpmin=parseInt((document.getElementById('mtpmin')||{value:''}).value)||0;
 
   // Column visibility: hide non-selected program columns
   let _cs=document.getElementById('_prog-col-css');
@@ -882,7 +846,13 @@ function fM(){
     const ev=(((aMap[r.i]||{}).pr||{})[String(pi)]||{}).ev||[];
     return dataMonthIdx!==null?(ev[dataMonthIdx]||0)>0:(mi?mi.some(j=>(ev[j]||0)>0):ev.some(v=>v>0));
   };
-  const fF=f.filter(_spFilter);
+  const _mtpFilter=(r)=>{
+    if(!mtpmin)return true;
+    const a=aMap[r.i]||{};
+    const tp=displayPis.reduce((s,pi)=>{const px=((a.pr||{})[String(pi)]||{}).px||[];return s+(dataMonthIdx!==null?px[dataMonthIdx]||0:(mi?mi.reduce((s2,j)=>s2+(px[j]||0),0):px.reduce((s2,v)=>s2+(v||0),0)));},0);
+    return tp>=mtpmin;
+  };
+  const fF=f.filter(r=>_spFilter(r)&&_mtpFilter(r));
 
   document.getElementById('mTb').innerHTML=fF.map(r=>{
     const a=aMap[r.i]||{tot:[],pax:[],pr:{}};
@@ -1255,6 +1225,7 @@ function rWkByWeek(wk,nd){
           <select id="wkst" onchange="fWkN()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
           <select id="wkpr" onchange="fWkN()"><option value="">All programs</option>${[...new Set(Object.values(wk.nw).flatMap(refs=>Object.values(refs).flat().map(e=>e.pr)).filter(Boolean))].sort().map(p=>`<option value="${ce(p)}">${ce(p)}</option>`).join('')}</select>
           <select id="wksf" onchange="fWkN()"><option value="">All</option><option value="z">Has zero</option><option value="c">All complete</option></select>
+          <input id="bwtpmin" type="number" min="0" placeholder="Min pax" style="width:80px" oninput="fWkN()">
           <span class="fc" id="wkfc"></span>
         </div>
         <div class="tbl-wrap"><table><thead><tr>
@@ -1279,17 +1250,21 @@ function fWkN(){
   const st=(document.getElementById('wkst')||{value:''}).value;
   const pr=(document.getElementById('wkpr')||{value:''}).value;
   const sf=(document.getElementById('wksf')||{value:''}).value;
+  const bwtpmin=parseInt((document.getElementById('bwtpmin')||{value:''}).value)||0;
   let rows=Object.entries(nw).map(([ref,evs])=>{
     // filter events by program first if selected
     const fevs=pr?evs.filter(e=>e.pr===pr):evs;
     if(pr&&!fevs.length) return null;
     const ni=NI.find(n=>n[0]===ref)||[ref,ref,'—'];
     const z=fevs.filter(e=>e.st==='z').length,c=fevs.filter(e=>e.st==='c').length,p=fevs.filter(e=>e.st==='p').length;
-    return{ref,nm:ni[1],state:ni[2],evs:fevs,z,c,p,tot:fevs.length};
+    const pax=fevs.reduce((s,e)=>s+(e.at||0),0);
+    return{ref,nm:ni[1],state:ni[2],evs:fevs,z,c,p,tot:fevs.length,pax};
   }).filter(r=>{
     if(!r)return false;
     if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
-    if(st&&r.state!==st)return false;if(sf==='z'&&r.z===0)return false;if(sf==='c'&&(r.z>0||r.p>0))return false;return true;
+    if(st&&r.state!==st)return false;if(sf==='z'&&r.z===0)return false;if(sf==='c'&&(r.z>0||r.p>0))return false;
+    if(bwtpmin>0&&r.pax<bwtpmin)return false;
+    return true;
   }).sort((a,b)=>b.z-a.z||a.nm.localeCompare(b.nm));
   const _ctx=selWeek?' · '+selWeek:selMonth?' · '+((_monthSeq[selMonth]||{}).label||selMonth):'· all weeks';
   document.getElementById('wkfc').textContent=rows.length+' NADI'+_ctx;
@@ -1341,6 +1316,7 @@ function rWkByNadi(wk,nd){
           <select id="bnst" onchange="fBnN()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
           <select id="bnpr" onchange="fBnN()"><option value="">All programs</option>${[...new Set(Object.values(wk.nw).flatMap(refs=>Object.values(refs).flat().map(e=>e.pr)).filter(Boolean))].sort().map(p=>`<option value="${ce(p)}">${ce(p)}</option>`).join('')}</select>
           <select id="bnsf" onchange="fBnN()"><option value="">All status</option><option value="z">Has zero</option><option value="ok">All complete</option><option value="ut">Untouched</option></select>
+          <input id="bntpmin" type="number" min="0" placeholder="Min pax" style="width:80px" oninput="fBnN()">
           <span class="fc" id="bnfc"></span>
         </div>
         <div class="tbl-wrap"><table><thead><tr>
@@ -1362,6 +1338,7 @@ function fBnN(){
   const st=(document.getElementById('bnst')||{value:''}).value;
   const pr=(document.getElementById('bnpr')||{value:''}).value;
   const sf=(document.getElementById('bnsf')||{value:''}).value;
+  const bntpmin=parseInt((document.getElementById('bntpmin')||{value:''}).value)||0;
 
   // Rebuild nadiMap fresh — so program filter correctly recounts zeros/completes
   const nadiMap={};
@@ -1371,18 +1348,19 @@ function fBnN(){
     Object.entries(refs).forEach(([ref,evs])=>{
       const fevs=pr?evs.filter(e=>e.pr===pr):evs;
       if(!fevs.length)return;
-      if(!nadiMap[ref])nadiMap[ref]={z:0,c:0,p:0,tot:0,wks:new Set()};
+      if(!nadiMap[ref])nadiMap[ref]={z:0,c:0,p:0,tot:0,pax:0,wks:new Set()};
       nadiMap[ref].z+=fevs.filter(e=>e.st==='z').length;
       nadiMap[ref].c+=fevs.filter(e=>e.st==='c').length;
       nadiMap[ref].p+=fevs.filter(e=>e.st==='p').length;
       nadiMap[ref].tot+=fevs.length;
+      nadiMap[ref].pax+=fevs.reduce((s,e)=>s+(e.at||0),0);
       nadiMap[ref].wks.add(wkk);
     });
   });
 
   const allRows=NI.map(([ref,nm,state])=>{
     const m=nadiMap[ref];
-    return{ref,nm,state,z:m?m.z:0,c:m?m.c:0,p:m?m.p:0,tot:m?m.tot:0,wks:m?m.wks.size:0,ut:!m};
+    return{ref,nm,state,z:m?m.z:0,c:m?m.c:0,p:m?m.p:0,tot:m?m.tot:0,pax:m?m.pax:0,wks:m?m.wks.size:0,ut:!m};
   });
 
   const f=allRows.filter(r=>{
@@ -1392,6 +1370,7 @@ function fBnN(){
     if(sf==='z'&&r.z===0)return false;
     if(sf==='ok'&&(r.z>0||r.p>0||r.ut))return false;
     if(sf==='ut'&&!r.ut)return false;
+    if(bntpmin>0&&r.pax<bntpmin)return false;
     return true;
   }).sort((a,b)=>b.z-a.z||a.nm.localeCompare(b.nm));
 
