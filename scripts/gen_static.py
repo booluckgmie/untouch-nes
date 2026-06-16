@@ -34,7 +34,9 @@ if not SITES_FILE.exists():
         cur.execute("""
             SELECT ns.refid_mcmc,
                    COALESCE(nsp.sitename, 'Site-' || ns.id::text),
-                   COALESCE(st.name, '')
+                   COALESCE(st.name, ''),
+                   COALESCE(nsp.tp::text, ''),
+                   COALESCE(nsp.dusp::text, '')
             FROM public.nd_site ns
             LEFT JOIN public.nd_site_profile nsp ON nsp.id = ns.site_profile_id
             LEFT JOIN public.nd_state st ON st.id = nsp.state_id
@@ -44,7 +46,7 @@ if not SITES_FILE.exists():
         rows = cur.fetchall()
     conn.close()
     SITES_FILE.parent.mkdir(parents=True, exist_ok=True)
-    SITES_FILE.write_text(json.dumps({"sites": [[r[0],r[1],r[2]] for r in rows]}), encoding="utf-8")
+    SITES_FILE.write_text(json.dumps({"sites": [[r[0],r[1],r[2],r[3],r[4]] for r in rows]}), encoding="utf-8")
     print(f"  Written {len(rows)} sites -> {SITES_FILE}")
 
 sites = json.loads(SITES_FILE.read_text(encoding="utf-8"))["sites"]

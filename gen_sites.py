@@ -8,7 +8,9 @@ with conn.cursor() as cur:
     cur.execute("""
         SELECT ns.refid_mcmc,
                COALESCE(nsp.sitename, 'Site-' || ns.id::text) AS nadi_name,
-               COALESCE(st.name, '') AS state
+               COALESCE(st.name, '') AS state,
+               COALESCE(nsp.tp::text, '') AS tp,
+               COALESCE(nsp.dusp::text, '') AS dusp
         FROM public.nd_site ns
         LEFT JOIN public.nd_site_profile nsp ON nsp.id = ns.site_profile_id
         LEFT JOIN public.nd_state st ON st.id = nsp.state_id
@@ -18,7 +20,7 @@ with conn.cursor() as cur:
     rows = cur.fetchall()
 conn.close()
 
-sites = [[r[0], r[1], r[2]] for r in rows]
+sites = [[r[0], r[1], r[2], r[3], r[4]] for r in rows]
 print(f"Fetched {len(sites)} sites from DB")
 
 out = Path(__file__).parent / "data" / "all_sites.json"
