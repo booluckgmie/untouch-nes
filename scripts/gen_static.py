@@ -13,7 +13,7 @@ Run: python scripts/gen_static.py
 """
 import json
 import sys
-from datetime import date
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -99,7 +99,7 @@ for sub_id in [1, 2, 3, 4, 8]:
     df     = DB.apply_sso_remap(df, sub_id)
     print(f"  {len(df):,} participant rows | {df['event_id'].nunique():,} unique events")
 
-    fetched = str(date.today())
+    fetched = datetime.now().strftime("%d %b %Y, %H:%M")
     payload = {
         "sub_id":     sub_id,
         "fetched":    fetched,
