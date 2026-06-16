@@ -26,6 +26,7 @@ SSO_MAP = {
 # Programs superseded by SSO remap — dropped per subcategory after remap is applied.
 DROPPED_PROGRAMS: dict[int, set] = {
     2: {"NADI-Nurture", "NADI-SkillForge"},
+    3: {"NADI TUISYEN RAKYAT"},
 }
 
 def sso_label(uid) -> str:
