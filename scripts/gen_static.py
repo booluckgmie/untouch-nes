@@ -6,6 +6,7 @@ Writes to public/data/:
   sub_1.json   — Entrepreneur data
   sub_2.json   — LifelongLearning data
   sub_3.json   — NADI4U Wellbeing data
+  sub_4.json   — NADI4U Awareness data
   sub_8.json   — NADI2U Wellbeing data
 
 Run: python scripts/gen_static.py
@@ -59,7 +60,7 @@ print(f"sites.json  ({len(sites)} sites)")
 
 # ── Fetch each subcategory ────────────────────────────────────────────────────
 meta_subs = []
-for sub_id in [1, 2, 3, 8]:
+for sub_id in [1, 2, 3, 4, 8]:
     info = DB.SUBCATEGORIES.get(sub_id, {})
     print(f"\n=== sub{sub_id} {info.get('label','')} ===")
 
