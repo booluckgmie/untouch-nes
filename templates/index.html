@@ -534,12 +534,14 @@ async function loadSubData(id){
 function buildShell(id){
   const d=window._D,nd=d.nadi,col=COL[nd.mod]||'#555',lbl=nd.mod==='LifelongLearning'?'Lifelong Learning':nd.mod;
   const s=SUBS[id]||{};const totZ=d.weekly.zero.length;
+  const _nm=(d.monthly&&d.monthly.months||[]).length||1;
+  const _thresh=3*Math.max(1,Math.round(_nm/3));
   const aMap={};nd.rows.forEach(([i,e,p,pr])=>aMap[i]={e,p,pr});
   tRowsAll=NI.map((n,i)=>{
     const[ref,nm,state]=n,a=aMap[i];
     const te=a?a.e:0,tp=a?a.p:0,pr=a?a.pr:{};
     const ap=Object.keys(pr).length;
-    return{i,ref,nm,state,te,tp,pr,ap,tp2:nd.progs.length,st:(te===0||tp===0)?'u':ap<nd.progs.length?'p':'a'};
+    return{i,ref,nm,state,te,tp,pr,ap,tp2:nd.progs.length,st:te<_thresh?'u':ap<nd.progs.length?'p':'a'};
   });
   document.getElementById('main').innerHTML=`
     <div class="top-bar">
@@ -575,7 +577,7 @@ function renderNadi(d){
       <div class="kpi"><div class="kpi-l">Events</div><div class="kpi-v" style="color:${col}">${fN(nd.e)}</div><div class="kpi-s">${nd.progs.length} programs</div></div>
       <div class="kpi"><div class="kpi-l">Pax</div><div class="kpi-v">${fN(nd.p)}</div><div class="kpi-s">registrations</div></div>
       <div class="kpi"><div class="kpi-l">Active NADI</div><div class="kpi-v" style="color:var(--green)">${nd.a}</div><div class="kpi-s">${Math.round(nd.a/1099*100)}% of 1,099</div></div>
-      <div class="kpi"><div class="kpi-l">Untouched</div><div class="kpi-v" style="color:var(--red)">${nd.u}</div><div class="kpi-s">0 events</div></div>
+      <div class="kpi"><div class="kpi-l">Untouched</div><div class="kpi-v" style="color:var(--red)">${nd.u}</div><div class="kpi-s">&lt;3 events/quarter</div></div>
     </div>
     <div class="content">
       <div class="toolbar">
@@ -927,7 +929,7 @@ function renderWeekly(d){
       ${ut.length?`<div style="flex-shrink:0;margin-top:6px">
         <div style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:9px 14px;background:#fef2f2;border:1px solid #f5c6c6;border-radius:8px" onclick="tUT(this)">
           <span style="font-size:12px;font-weight:700;color:var(--red)">⚠ ${ut.length} Untouched NADI</span>
-          <span style="font-size:11px;color:#a00">— 0 events in this subcategory</span>
+          <span style="font-size:11px;color:#a00">— &lt;3 events/quarter</span>
           <span id="utTog" style="font-size:11px;color:var(--purple);margin-left:auto">show ▼</span>
         </div>
         <div id="utList" style="display:none;border:1px solid #f5c6c6;border-top:none;border-radius:0 0 8px 8px;background:#fff8f8;max-height:200px;overflow-y:auto">

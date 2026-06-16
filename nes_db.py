@@ -214,6 +214,12 @@ def build_nadi_index(df: pd.DataFrame, df_sites: pd.DataFrame, sub_id: int) -> d
     total_pax   = df["participant_id"].nunique() if "participant_id" in df else 0
     active_refs = set(ev["refid_mcmc"].dropna().unique())
 
+    # Quarterly threshold: untouched = < 3 events per quarter on average
+    _df_m = df.copy()
+    _df_m["_month"] = pd.to_datetime(_df_m["event_startdate"], errors="coerce").dt.to_period("M")
+    _nm  = _df_m["_month"].dropna().nunique() or 1
+    _thresh = 3 * max(1, round(_nm / 3))
+
     nadi_agg = {}
     for _, r in ev.iterrows():
         ref = r["refid_mcmc"]
@@ -237,13 +243,16 @@ def build_nadi_index(df: pd.DataFrame, df_sites: pd.DataFrame, sub_id: int) -> d
             continue
         rows.append([i, agg["te"], agg["tp"], agg["pr"]])
 
+    untouched_nadi = (sum(1 for agg in nadi_agg.values() if agg["te"] < _thresh)
+                      + (len(sites_list) - len(active_refs)))
+
     return {
         "cat":   info.get("cat", ""),
         "mod":   info.get("mod", ""),
         "e":     total_ev,
         "p":     total_pax,
         "a":     len(active_refs),
-        "u":     len(sites_list) - len(active_refs),
+        "u":     untouched_nadi,
         "progs": progs,
         "rows":  rows,
     }
