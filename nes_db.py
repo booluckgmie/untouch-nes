@@ -25,19 +25,23 @@ START_DATE = None
 END_DATE   = None
 
 SUBCATEGORIES = {
-    1:  "NADI4U-Entrepreneur",
-    2:  "NADI4U-LifelongLearning",
-    3:  "NADI4U-Wellbeing",
-    4:  "NADI4U-Awareness",
-    5:  "NADI4U-GovInit",
-    6:  "NADI2U-Entrepreneur",
-    7:  "NADI2U-LifelongLearning",
-    8:  "NADI2U-Wellbeing",
-    9:  "NADI2U-Awareness",
-    10: "NADI2U-GovInit",
-    11: "OTHERS-Activity",
-    12: "OTHERS-Training",
-    13: "OTHERS-Services",
+    # id: {cat, mod, label}
+    # cat   = top-level category  (NADI4U / NADI2U / OTHERS)
+    # mod   = pillar / module name
+    # label = combined slug used for filenames and display
+    1:  {"cat": "NADI4U", "mod": "Entrepreneur",     "label": "NADI4U-Entrepreneur"},
+    2:  {"cat": "NADI4U", "mod": "LifelongLearning", "label": "NADI4U-LifelongLearning"},
+    3:  {"cat": "NADI4U", "mod": "Wellbeing",        "label": "NADI4U-Wellbeing"},
+    4:  {"cat": "NADI4U", "mod": "Awareness",        "label": "NADI4U-Awareness"},
+    5:  {"cat": "NADI4U", "mod": "GovInit",          "label": "NADI4U-GovInit"},
+    6:  {"cat": "NADI2U", "mod": "Entrepreneur",     "label": "NADI2U-Entrepreneur"},
+    7:  {"cat": "NADI2U", "mod": "LifelongLearning", "label": "NADI2U-LifelongLearning"},
+    8:  {"cat": "NADI2U", "mod": "Wellbeing",        "label": "NADI2U-Wellbeing"},
+    9:  {"cat": "NADI2U", "mod": "Awareness",        "label": "NADI2U-Awareness"},
+    10: {"cat": "NADI2U", "mod": "GovInit",          "label": "NADI2U-GovInit"},
+    11: {"cat": "OTHERS", "mod": "Activity",         "label": "OTHERS-Activity"},
+    12: {"cat": "OTHERS", "mod": "Training",         "label": "OTHERS-Training"},
+    13: {"cat": "OTHERS", "mod": "Services",         "label": "OTHERS-Services"},
 }
 
 _BATCH       = 5_000
@@ -428,9 +432,10 @@ def save_to_excel(path: str, sheets: dict):
 if __name__ == "__main__":
     df_all_sites = fetch_all_sites()
 
-    for sub_id, sub_label in SUBCATEGORIES.items():
+    for sub_id, info in SUBCATEGORIES.items():
+        sub_label = info["label"]
         print(f"\n{'='*60}")
-        print(f"Subcategory {sub_id}: {sub_label}")
+        print(f"Subcategory {sub_id}: {sub_label}  [{info['cat']} / {info['mod']}]")
         print(f"{'='*60}")
 
         df = fetch(sub_id)
