@@ -54,6 +54,9 @@ def _arr(ids) -> str:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 1 — Get event IDs for a given subcategory
+#
+#   start_date / end_date: explicit args take priority over module globals.
+#   This lets gen_static.py pass its own date window without touching globals.
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _get_event_ids(
@@ -62,7 +65,6 @@ def _get_event_ids(
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> list:
-    # Prefer explicit args; fall back to module-level globals for CLI usage
     _start = start_date if start_date is not None else START_DATE
     _end   = end_date   if end_date   is not None else END_DATE
     date_filter = ""
@@ -91,7 +93,7 @@ def _get_event_ids(
 #   DISTINCT ON (e.id): if an event has multiple sites in its JSONB array,
 #   we take the first (lowest site_id integer) to avoid row explosion.
 #
-#   New columns vs old version:
+#   Event-site columns (new vs original nes_db):
 #     event_site_profile_id, event_site_name, event_site_refid_mcmc,
 #     event_site_tp, event_site_dusp, event_site_region, event_site_phase,
 #     event_site_parliament, event_site_dun, event_site_mukim, event_site_state
@@ -148,11 +150,9 @@ def _fetch_events(conn, event_ids: list) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 3 — Fetch participants + member's home NADI site
 #
-#   Home NADI columns (unchanged from v1):
-#     refid_mcmc, nadi_name, state, standard_code
-#
-#   These are distinct from event_site_* columns — a participant's home NADI
-#   may differ from the site where the event was held.
+#   Home NADI columns (refid_mcmc, nadi_name, state, standard_code) come from
+#   the member's registered site — distinct from event_site_* columns which
+#   describe where the event was physically held.
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _fetch_participants(conn, event_ids: list, cur_name: str) -> pd.DataFrame:
@@ -305,11 +305,12 @@ def fetch_all_sites() -> pd.DataFrame:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Site-level pivot  (programs × events/pax)
+# Site-level pivot  (programs × events/pax)  — used by __main__ Excel export
 #
-#   Pivot index uses member's home NADI (refid_mcmc, nadi_name, state) so that
-#   the pivot matches the all-sites reference table for a full 1099-site view.
-#   all_programs — fixed program list for consistent columns across monthly sheets.
+#   Index: member's home NADI (refid_mcmc, nadi_name, state) so it aligns
+#   with fetch_all_sites() for a guaranteed 1099-site view.
+#   all_programs: fixed column list so all monthly sheets stay structurally
+#   identical — months with no data for a program show zero columns.
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_site_pivot(
@@ -368,7 +369,7 @@ def build_site_pivot(
     pivot[("Total", "Sum of events")] = true_ev
     pivot[("Total", "Sum of pax")]    = true_pax
 
-    # Fill any missing fixed-program columns (months with no data for a program)
+    # Fill any missing fixed-program columns (months with no data for that program)
     for col in ordered:
         if col not in pivot.columns:
             pivot[col] = 0
@@ -379,9 +380,7 @@ def build_site_pivot(
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Monthly pivot sheets  (one pivot per calendar month + "All" summary)
-#
-#   Columns are fixed to the full program list so all sheets are identical
-#   in structure — months with no data for a program show zero columns.
+#   Used by __main__ Excel export only.
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_monthly_sheets(df: pd.DataFrame, df_sites: pd.DataFrame) -> dict:
@@ -404,7 +403,198 @@ def build_monthly_sheets(df: pd.DataFrame, df_sites: pd.DataFrame) -> dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Save helpers
+# JSON output helpers  (consumed by gen_static.py → Netlify frontend)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def apply_sso_remap(df: pd.DataFrame, sub_id: int) -> pd.DataFrame:
+    """
+    Hook for SSO / username remapping before JSON serialisation.
+    NES participant data does not require SSO remapping — this is a no-op
+    passthrough so gen_static.py can call it unconditionally without branching.
+    """
+    return df
+
+
+def _safe_int(v) -> int:
+    """Coerce numpy int64 / NaN / None to a plain Python int safely."""
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _participant_counts(df_pax: pd.DataFrame) -> dict:
+    """
+    Standard demographic breakdown for a participant slice.
+    All values are plain Python ints (JSON-serialisable).
+
+    Keys: total, women, youth (15-24), children (<12), oku
+    """
+    if df_pax.empty:
+        return {"total": 0, "women": 0, "youth": 0, "children": 0, "oku": 0}
+
+    age = pd.to_numeric(df_pax["age"], errors="coerce")
+    return {
+        "total":    _safe_int(df_pax["participant_id"].nunique()),
+        "women":    _safe_int((df_pax["gender"] == "Perempuan").sum()),
+        "youth":    _safe_int(age.between(15, 24, inclusive="both").sum()),
+        "children": _safe_int((age < 12).sum()),
+        "oku":      _safe_int((df_pax["oku_status"].str.lower() == "true").sum()),
+    }
+
+
+def _week_label(week_period) -> str:
+    """
+    Human-readable ISO-week label: "19 Jan – 25 Jan 2026".
+    Uses cross-platform %-free formatting (lstrip to drop leading zero).
+    """
+    s = week_period.start_time
+    e = week_period.end_time
+    return (
+        f"{s.strftime('%d %b').lstrip('0')} – "
+        f"{e.strftime('%d %b %Y').lstrip('0')}"
+    )
+
+
+def build_nadi_index(
+    df: pd.DataFrame,
+    df_sites: pd.DataFrame,
+    sub_id: int,
+) -> list[dict]:
+    """
+    Per-NADI summary — one entry per site, covering all time in the dataset.
+
+    Schema per entry:
+      {
+        "refid":    "N0001",
+        "name":     "NADI Kampung Baru",
+        "state":    "Selangor",
+        "events":   12,
+        "pax":      {"total": 340, "women": 120, "youth": 80, "children": 5, "oku": 2},
+        "programs": {"NADI-Preneur": {"events": 4, "pax": 120}}
+      }
+
+    All 1099 sites from df_sites are included; sites with no activity get zeros.
+    """
+    df_pax = df[df["participant_id"].notna()].copy()
+
+    site_map = (
+        df_sites[["refid_mcmc", "nadi_name", "state"]]
+        .drop_duplicates("refid_mcmc")
+        .set_index("refid_mcmc")
+    )
+
+    result = []
+    for refid, site_row in site_map.iterrows():
+        s = df_pax[df_pax["refid_mcmc"] == refid]
+
+        programs: dict = {}
+        if not s.empty:
+            for prog, grp in s.groupby("program"):
+                if not prog:
+                    continue
+                programs[prog] = {
+                    "events": _safe_int(grp["event_id"].nunique()),
+                    "pax":    _safe_int(grp["participant_id"].nunique()),
+                }
+
+        result.append({
+            "refid":    refid,
+            "name":     site_row["nadi_name"],
+            "state":    site_row["state"],
+            "events":   _safe_int(s["event_id"].nunique()) if not s.empty else 0,
+            "pax":      _participant_counts(s),
+            "programs": programs,
+        })
+
+    return result
+
+
+def build_monthly(
+    df: pd.DataFrame,
+    df_sites: pd.DataFrame,
+    sub_id: int,
+) -> list[dict]:
+    """
+    Monthly rollup — one entry per calendar month, chronologically ordered.
+
+    Schema per entry:
+      {
+        "period": "2026-01",
+        "label":  "Jan 2026",
+        "events": 45,
+        "pax":    {"total": 1200, "women": 400, "youth": 300, "children": 50, "oku": 10},
+        "nadi":   {"N0001": {"events": 3, "pax": 80}, ...}
+      }
+    """
+    df = df.copy()
+    df["_period"] = pd.to_datetime(df["event_startdate"], errors="coerce").dt.to_period("M")
+    df_pax = df[df["participant_id"].notna()]
+
+    result = []
+    for period in sorted(df["_period"].dropna().unique()):
+        m = df_pax[df_pax["_period"] == period]
+        nadi_map: dict = {}
+        for refid, grp in m.groupby("refid_mcmc"):
+            nadi_map[refid] = {
+                "events": _safe_int(grp["event_id"].nunique()),
+                "pax":    _safe_int(grp["participant_id"].nunique()),
+            }
+        result.append({
+            "period": str(period),                     # "2026-01"
+            "label":  period.strftime("%b %Y"),         # "Jan 2026"
+            "events": _safe_int(m["event_id"].nunique()),
+            "pax":    _participant_counts(m),
+            "nadi":   nadi_map,
+        })
+
+    return result
+
+
+def build_weekly(
+    df: pd.DataFrame,
+    df_sites: pd.DataFrame,
+    sub_id: int,
+) -> list[dict]:
+    """
+    Weekly rollup — one entry per ISO week (Mon–Sun), chronologically ordered.
+
+    Schema per entry:
+      {
+        "period": "2026-W03",
+        "label":  "12 Jan – 18 Jan 2026",
+        "events": 12,
+        "pax":    {"total": 300, "women": 100, "youth": 80, "children": 10, "oku": 2},
+        "nadi":   {"N0001": {"events": 1, "pax": 25}, ...}
+      }
+    """
+    df = df.copy()
+    df["_week"] = pd.to_datetime(df["event_startdate"], errors="coerce").dt.to_period("W")
+    df_pax = df[df["participant_id"].notna()]
+
+    result = []
+    for week in sorted(df["_week"].dropna().unique()):
+        w = df_pax[df_pax["_week"] == week]
+        w_start = week.start_time
+        nadi_map: dict = {}
+        for refid, grp in w.groupby("refid_mcmc"):
+            nadi_map[refid] = {
+                "events": _safe_int(grp["event_id"].nunique()),
+                "pax":    _safe_int(grp["participant_id"].nunique()),
+            }
+        result.append({
+            "period": f"{w_start.year}-W{w_start.isocalendar()[1]:02d}",
+            "label":  _week_label(week),
+            "events": _safe_int(w["event_id"].nunique()),
+            "pax":    _participant_counts(w),
+            "nadi":   nadi_map,
+        })
+
+    return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Save helpers  (CSV + Excel for __main__ CLI export)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def save_raw(df: pd.DataFrame, path: str):
@@ -434,7 +624,7 @@ def save_to_excel(path: str, sheets: dict):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Main
+# Main — CLI export: CSV + monthly pivot Excel per subcategory
 # ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
