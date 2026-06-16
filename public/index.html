@@ -1400,23 +1400,39 @@ function openPanel(ni_idx){
 }
 function renderPanelSum(ni_idx,ref){
   const d=window._D;if(!d)return;const nd=d.nadi,col=COL[nd.mod]||'#555';
-  const aMap={};nd.rows.forEach(([i,e,p,pr])=>aMap[i]={e,p,pr});const a=aMap[ni_idx];
+  const sm=d.monthly,progs=sm.progs||nd.progs||[];
+  const mi=_filteredMI;
+  // Build totals from monthly data (consistent with Monthly Update tab numbers)
+  let a=null;
+  const mRow=(sm.rows||[]).find(r=>r[0]===ni_idx);
+  if(mRow){
+    const[,tot,pax,pr]=mRow;
+    const idxs=mi||(Array.isArray(tot)?tot.map((_,i)=>i):[]);
+    const te=idxs.reduce((s,j)=>s+((Array.isArray(tot)?tot[j]:0)||0),0);
+    const tp=idxs.reduce((s,j)=>s+((Array.isArray(pax)?pax[j]:0)||0),0);
+    const prF={};
+    if(pr&&typeof pr==='object')Object.entries(pr).forEach(([pk,pd])=>{
+      const ev=idxs.reduce((s,j)=>s+(((pd.ev||[])[j])||0),0);
+      const px=idxs.reduce((s,j)=>s+(((pd.px||[])[j])||0),0);
+      if(ev>0||px>0)prF[pk]=[ev,px];
+    });
+    if(te>0)a={e:te,p:tp,pr:prF};
+  }
   let html='';
   if(!a){
     html+=`<div class="put"><div class="put-t">No events in this subcategory</div><div class="put-s">Programs not yet activated:</div></div>`;
-    html+=nd.progs.map(p=>`<div class="prow"><div class="pdot2" style="background:var(--line)"></div><span class="pname" style="color:var(--t3)">${ce(p)}</span><span class="pmiss">0 events</span></div>`).join('');
+    html+=progs.map(p=>`<div class="prow"><div class="pdot2" style="background:var(--line)"></div><span class="pname" style="color:var(--t3)">${ce(p)}</span><span class="pmiss">0 events</span></div>`).join('');
   } else {
     html+=`<div style="font-size:11px;color:var(--t2);font-weight:600;margin-bottom:8px">${nd.cat} · ${nd.mod} — ${fN(a.e)} ev · ${fN(a.p)} pax</div>`;
-    html+=nd.progs.map((p,k)=>{const pr=a.pr[String(k)];return pr
+    html+=progs.map((p,k)=>{const pr=a.pr[String(k)];return pr
       ?`<div class="prow"><div class="pdot2" style="background:${col}"></div><span class="pname">${ce(p)}</span><span class="pev">${fN(pr[0])}</span><span class="ppax">${fN(pr[1])} pax</span></div>`
       :`<div class="prow"><div class="pdot2" style="background:var(--line)"></div><span class="pname" style="color:var(--t3)">${ce(p)}</span><span class="pmiss">not active</span></div>`;
     }).join('');
     // Monthly spark
-    const sm=d.monthly;const smMap={};
-    (sm.rows||[]).forEach(r=>{smMap[r[0]]=Array.isArray(r[1])?r[1]:[];});
+    const smMap={};(sm.rows||[]).forEach(r=>{smMap[r[0]]=Array.isArray(r[1])?r[1]:[];});
     const _sv=smMap[ni_idx]||[];
-    const dispVals=_filteredMI?_filteredMI.map(i=>_sv[i]||0):_sv;
-    const dispMths=_filteredMI?_filteredMI.map(i=>sm.months[i]||''):sm.months;
+    const dispVals=mi?mi.map(i=>_sv[i]||0):_sv;
+    const dispMths=mi?mi.map(i=>sm.months[i]||''):sm.months;
     const maxV=Math.max(...dispVals,1);
     if(dispVals.some(v=>v>0)){
       html+=`<div style="margin-top:12px;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">Monthly trend</div>
