@@ -227,6 +227,7 @@ table.t-mo tfoot td.f-st {position:sticky;left:240px;z-index:3;background:#fafaf
   .content{padding:0 12px 12px}
 }
 </style>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 <button class="sb-toggle" id="sbToggle" onclick="toggleSb()">&#9776;</button>
@@ -285,9 +286,39 @@ function closeSb(){
   document.querySelector('.sb').classList.remove('open');
   const bd=document.getElementById('sbBd');if(bd)bd.classList.remove('open');
 }
-function exportXlsx(){
-  if(!curSub){return;}
-  window.location.href='/api/export/'+curSub;
+async function exportXlsx(){
+  const btn=document.getElementById('exportBtn');
+  if(!curSub||!window._D){return;}
+  if(btn){btn.disabled=true;btn.textContent='⏳ Generating…';}
+  try{
+    const d=window._D,sm=d.monthly,months=sm.months||[];
+    const MN={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+    const monthMap={};months.forEach((m,i)=>{const mn=(m||'').split(' ')[0].slice(0,3);if(mn in MN)monthMap[i]=MN[mn];});
+    const STATES=['JOHOR','KEDAH','KELANTAN','MELAKA','NEGERI SEMBILAN','PAHANG','PERAK','PERLIS',
+      'PULAU PINANG','SABAH','SARAWAK','SELANGOR','TERENGGANU','W.P KUALA LUMPUR','W.P LABUAN','W.P PUTRAJAYA'];
+    const stateEv={};STATES.forEach(s=>stateEv[s]=new Array(12).fill(0));
+    const filtSet=new Set((window._filteredRows||[]).map(r=>r.i));
+    const sp=(document.getElementById('mprog')||{value:''}).value;
+    const activeMonthIdxs=selMonth!==null?[selMonth]:months.map((_,i)=>i);
+    (sm.rows||[]).forEach(row=>{
+      if(window._filteredRows&&!filtSet.has(row[0]))return;
+      const ni=NI[row[0]];if(!ni)return;
+      const state=String(ni[2]||'').toUpperCase().trim();if(!(state in stateEv))return;
+      const evArr=sp!==''?((row[3]||{})[sp]||{}).ev||[]:Array.isArray(row[1])?row[1]:[];
+      activeMonthIdxs.forEach(di=>{const mo=monthMap[di];if(mo!==undefined)stateEv[state][mo]+=(evArr[di]||0);});
+    });
+    const resp=await fetch('/api/template_xlsx');if(!resp.ok)throw new Error('Template not found');
+    const buf=new Uint8Array(await resp.arrayBuffer());
+    const wb=XLSX.read(buf,{type:'array',cellStyles:true,bookSST:true});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const sc=(r,c,v)=>{const addr=XLSX.utils.encode_cell({r:r-1,c:c-1});const cur=ws[addr]||{};ws[addr]={...cur,v:v||null,t:v?'n':'z'};};
+    STATES.forEach((state,si)=>{const rowNum=6+si,ev=stateEv[state];let tot=0;for(let mo=0;mo<12;mo++){sc(rowNum,3+mo,ev[mo]||null);tot+=ev[mo];}sc(rowNum,15,tot||null);});
+    let grand=0;for(let mo=0;mo<12;mo++){const t=STATES.reduce((s,st)=>s+stateEv[st][mo],0);sc(22,3+mo,t||null);grand+=t;}
+    sc(22,15,grand||null);sc(23,3,grand||null);
+    const info=SUBS[curSub]||{};
+    XLSX.writeFile(wb,`NES_${info.mod||'Report'}_${new Date().toISOString().slice(0,10)}.xlsx`,{bookType:'xlsx',cellStyles:true,bookSST:true});
+  }catch(e){alert('Export failed: '+e.message);}
+  finally{if(btn){btn.disabled=false;btn.textContent='⬇ Export Excel';}}
 }
 
 async function boot(){
@@ -641,7 +672,7 @@ function renderMonthly(d){
         <select id="msf" onchange="fM()"><option value="">All NADI</option><option value="a">Active only</option><option value="u">Untouched only</option></select>
         <select id="mprog" onchange="fM()"><option value="">All programs</option>${progs.map((p,pi)=>`<option value="${pi}">${ce(p.length>22?p.slice(0,21)+'…':p)}</option>`).join('')}</select>
         <span class="fc" id="mfc"></span>
-        <button class="export-btn" onclick="exportXlsx()" title="Download MCMC/TM Data Smart Services report">⬇ Export Excel</button>
+        <button id="exportBtn" class="export-btn" onclick="exportXlsx()" title="Download MCMC/TM Data Smart Services report">⬇ Export Excel</button>
       </div>
       <div class="tbl-wrap">
         <table class="t-mo" id="mTable">
@@ -738,6 +769,7 @@ function fM(){
     return true;
   });
   document.getElementById('mfc').textContent=fN(f.length)+' sites';
+  window._filteredRows=f;
 
   const footEv=new Array(np).fill(0);
   const footPx=new Array(np).fill(0);
@@ -752,7 +784,7 @@ function fM(){
     grandEv+=totEv; grandPx+=totPx;
     progEv.forEach((v,pi)=>{footEv[pi]+=v;}); progPx.forEach((v,pi)=>{footPx[pi]+=v;});
     const cells=progs.map((_,pi)=>
-      `<td class="${hc(progEv[pi])}" style="text-align:center;border-left:1px solid var(--line2);font-weight:${progEv[pi]?600:400}">${progEv[pi]?fN(progEv[pi]):'·'}</td>`+
+      `<td class="${hc(progEv[pi])}" onclick="event.stopPropagation();openProgCell(${r.i},${pi})" style="text-align:center;border-left:1px solid var(--line2);font-weight:${progEv[pi]?600:400};cursor:pointer">${progEv[pi]?fN(progEv[pi]):'·'}</td>`+
       `<td style="text-align:center;color:var(--t2);font-size:10px">${progPx[pi]?fN(progPx[pi]):'·'}</td>`
     ).join('');
     return `<tr onclick="openMoPanel(${r.i})" id="mi${r.i}" style="cursor:pointer">
@@ -824,6 +856,36 @@ function openMoPanel(nadi_idx){
         <tbody>${progRows}</tbody>
       </table>
     </div>`;
+  document.getElementById('panel').classList.add('open');
+  document.getElementById('ov2').classList.add('open');
+}
+
+function openProgCell(nadi_idx, pi){
+  const d=window._D;if(!d)return;
+  const aMap=window._mAMap||{}, months=window._mMonths||[], progs=window._mProgs||[];
+  const PROG_COLORS=window._mProgColors||['#4c44b0','#0b7575','#0b7a58','#a05208','#1650a0'];
+  const mH=window._mMH||(m=>{const[mn,yr]=m.split(' ');return mn+"'"+yr.slice(2);});
+  const ni=NI[nadi_idx]||[],[ref,nm2,state]=ni;
+  const a=aMap[nadi_idx]||{pr:{}};
+  const pr=a.pr[String(pi)]||{ev:[],px:[]};
+  const pc=PROG_COLORS[pi%PROG_COLORS.length];
+  const pname=progs[pi]||'Program '+pi;
+  const evArr=pr.ev||[], pxArr=pr.px||[];
+  const totEv=evArr.reduce((s,v)=>s+(v||0),0), totPx=pxArr.reduce((s,v)=>s+(v||0),0);
+  const mrows=months.map((m,i)=>{
+    const ev=evArr[i]||0, px=pxArr[i]||0;
+    return `<tr><td style="font-size:11px;padding:3px 0;color:var(--t3)">${mH(m)}</td><td style="text-align:right;font-size:11px;padding:3px 4px;font-weight:${ev?700:400};color:${ev?pc:'var(--t3)'}">${ev?fN(ev):'—'}</td><td style="text-align:right;font-size:11px;padding:3px 8px;color:var(--t2)">${px?fN(px):'—'}</td></tr>`;
+  }).join('');
+  document.getElementById('ptitle').textContent=nm2||ref;
+  document.getElementById('pref').textContent=(state||'')+' · '+ref;
+  document.getElementById('ptabs').innerHTML=`<span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:10px;background:${pc}22;color:${pc}">${ce(pname)}</span>`;
+  document.getElementById('pb').innerHTML=`
+    <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Events by month — ${ce(pname)}</div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr><th style="font-size:9px;color:var(--t3);text-align:left;padding:2px 0;font-weight:400">Month</th><th style="font-size:9px;color:var(--t3);text-align:right;padding:2px 4px;font-weight:400">Events</th><th style="font-size:9px;color:var(--t3);text-align:right;padding:2px 8px;font-weight:400">Pax</th></tr></thead>
+      <tbody>${mrows}</tbody>
+      <tfoot><tr style="border-top:1px solid var(--line)"><td style="font-size:11px;font-weight:700;padding:5px 0">Total</td><td style="text-align:right;font-size:13px;font-weight:700;padding:5px 4px;color:${pc}">${totEv?fN(totEv):'—'}</td><td style="text-align:right;font-size:11px;padding:5px 8px;color:var(--t2)">${totPx?fN(totPx):'—'}</td></tr></tfoot>
+    </table>`;
   document.getElementById('panel').classList.add('open');
   document.getElementById('ov2').classList.add('open');
 }

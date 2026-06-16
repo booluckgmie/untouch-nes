@@ -234,6 +234,14 @@ def api_cache_invalidate_all():
     return jsonify({"ok": True})
 
 
+@app.route("/api/template_xlsx")
+def api_template_xlsx():
+    from flask import send_file
+    tmpl = Path(__file__).parent / "template_report.xlsx"
+    return send_file(str(tmpl),
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
 @app.route("/api/export/<int:sub_id>")
 def api_export(sub_id: int):
     """Generate Excel report in MCMC/TM Data Smart Services template format."""
