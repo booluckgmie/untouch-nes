@@ -353,6 +353,7 @@ async function autoFetchAll(){
     document.getElementById('sb-upd').textContent=`Fetched ${done}/${total} subcategories…`;
   }
   document.getElementById('sb-upd').textContent='All data loaded · '+new Date().toLocaleDateString('en-MY');
+  if(!curSub) gOv(document.getElementById('navOv'));
 }
 
 function fetchOne(id, queueDone, queueTotal){
@@ -499,10 +500,14 @@ async function gSub(id,btn){
 
 async function loadSubData(id){
   document.getElementById('main').innerHTML=`<div class="state-box"><div class="icon">⏳</div><p>Loading data…</p></div>`;
-  const r=await fetch('/api/data/'+id).then(x=>x.json());
-  if(!r.ok){document.getElementById('main').innerHTML=`<div class="state-box"><div class="icon">⚠️</div><p>${r.error}</p></div>`;return;}
-  window._D=r.data;
-  buildShell(id);showTab('nadi');
+  try{
+    const r=await fetch('/api/data/'+id).then(x=>x.json());
+    if(!r.ok){document.getElementById('main').innerHTML=`<div class="state-box"><div class="icon">⚠️</div><p>${r.error||'Data not available'}</p><p style="font-size:11px;color:var(--t3)">Try fetching again from the sidebar.</p></div>`;return;}
+    window._D=r.data;
+    buildShell(id);showTab('nadi');
+  }catch(e){
+    document.getElementById('main').innerHTML=`<div class="state-box"><div class="icon">⚠️</div><p>Load failed: ${e.message}</p><button onclick="loadSubData(${id})" style="margin-top:8px;padding:4px 12px;cursor:pointer">Retry</button></div>`;
+  }
 }
 
 function buildShell(id){

@@ -403,6 +403,7 @@ async function autoFetchAll(){
     document.getElementById('sb-upd').textContent=`Loaded ${done}/${total}…`;
   }
   document.getElementById('sb-upd').textContent='Ready · '+new Date().toLocaleDateString('en-MY');
+  if(!curSub) gOv(document.getElementById('navOv'));
 }
 
 async function fetchOne(id, queueDone, queueTotal){
@@ -510,13 +511,13 @@ async function gSub(id,btn){
 
 async function loadSubData(id){
   document.getElementById('main').innerHTML=`<div class="state-box"><div class="icon">⏳</div><p>Loading data…</p></div>`;
-  const cached=window['_sc'+id];
-  if(cached){window._D=cached;buildShell(id);showTab('nadi');return;}
   try{
-    const r=await fetch('/data/sub_'+id+'.json').then(x=>x.json());
-    window._D=r;buildShell(id);showTab('nadi');
+    const cached=window['_sc'+id];
+    if(cached){window._D=cached;}
+    else{const r=await fetch('/data/sub_'+id+'.json').then(x=>x.json());window['_sc'+id]=r;window._D=r;}
+    buildShell(id);showTab('nadi');
   }catch(e){
-    document.getElementById('main').innerHTML=`<div class="state-box"><div class="icon">⚠️</div><p>Data unavailable</p></div>`;
+    document.getElementById('main').innerHTML=`<div class="state-box"><div class="icon">⚠️</div><p>Load failed: ${e.message}</p><button onclick="loadSubData(${id})" style="margin-top:8px;padding:4px 12px;cursor:pointer">Retry</button></div>`;
   }
 }
 
