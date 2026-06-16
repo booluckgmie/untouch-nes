@@ -6,12 +6,11 @@ import psycopg2.extras
 from credential import DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
 
 PG_CONFIG = {
-    "host":     DB_HOST,
-    "port":     DB_PORT,
-    "user":     DB_USER,
-    "password": DB_PASSWORD,
-    "database": DB_NAME,
-    "connect_timeout": 10,
+    "host": os.environ.get("DB_HOST", "").strip(), # .strip() removes trailing/leading spaces
+    "port": os.environ.get("DB_PORT", "").strip(),
+    "user": os.environ.get("DB_USER", "").strip(),
+    "password": os.environ.get("DB_PASSWORD", ""),
+    "database": os.environ.get("DB_NAME", "").strip(),
 }
 
 def get_conn():
