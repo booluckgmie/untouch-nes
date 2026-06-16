@@ -217,8 +217,10 @@ def build_nadi_index(df: pd.DataFrame, df_sites: pd.DataFrame, sub_id: int) -> d
     # Quarterly threshold: untouched = < 3 events per quarter on average
     _df_m = df.copy()
     _df_m["_month"] = pd.to_datetime(_df_m["event_startdate"], errors="coerce").dt.to_period("M")
-    _nm  = _df_m["_month"].dropna().nunique() or 1
-    _thresh = 3 * max(1, round(_nm / 3))
+    _df_m["_qtr"] = _df_m["_month"].apply(
+        lambda p: f"{p.year}-Q{(p.month-1)//3+1}" if pd.notna(p) else None)
+    _num_q = max(1, _df_m["_qtr"].dropna().nunique())
+    _thresh = 3 * _num_q
 
     nadi_agg = {}
     for _, r in ev.iterrows():

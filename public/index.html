@@ -277,7 +277,7 @@ const fmt=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1).replace(/\.
 const fN=n=>(+n).toLocaleString();
 const ce=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const hc=v=>v===0?'h0':v<=5?'h1':v<=20?'h2':v<=99?'h3':'h4';
-let SUBS={},NI=[],STATES=[],curSub=null,curTab='nadi',tRowsAll=[],selWeek=null,selMonth=null,_monthSeq={},_sd='',_ed='',_clientSd='2026-01-01',_clientEd='',_filteredMI=null;
+let SUBS={},NI=[],STATES=[],curSub=null,curTab='nadi',tRowsAll=[],selWeek=null,selMonth=null,_monthSeq={},_sd='',_ed='',_clientSd='2026-01-01',_clientEd='',_filteredMI=null,_nSort={k:'',d:1},_mSort={k:'',d:1};
 
 function toggleSb(){
   const sb=document.querySelector('.sb'),bd=document.getElementById('sbBd');
@@ -359,8 +359,9 @@ function rebuildTRowsAll(){
   const d=window._D;if(!d)return;
   const nd=d.nadi,sm=d.monthly,mi=_filteredMI;
   if(!mi){
-    const _nm=(sm.months||[]).length||1;
-    const _thresh=3*Math.max(1,Math.round(_nm/3));
+    const _MN={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
+    const _qtrs=new Set((sm.months||[]).map(m=>{const[mn,yr]=(m||'').split(' ');return yr+'-Q'+Math.ceil((_MN[mn]||1)/3);}));
+    const _thresh=3*Math.max(1,_qtrs.size);
     const aMap={};nd.rows.forEach(([i,e,p,pr])=>aMap[i]={e,p,pr});
     tRowsAll=NI.map((n,i)=>{
       const[ref,nm,state]=n,a=aMap[i];
@@ -369,8 +370,9 @@ function rebuildTRowsAll(){
       return{i,ref,nm,state,te,tp,pr,ap,tp2:nd.progs.length,st:te<_thresh?'u':ap<nd.progs.length?'p':'a'};
     });
   } else {
-    const _nm=mi.length||1;
-    const _thresh=3*Math.max(1,Math.round(_nm/3));
+    const _MN={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
+    const _qtrs=new Set(mi.map(i=>{const m=(sm.months||[])[i]||'';const[mn,yr]=m.split(' ');return yr+'-Q'+Math.ceil((_MN[mn]||1)/3);}));
+    const _thresh=3*Math.max(1,_qtrs.size);
     const aMap={};
     (sm.rows||[]).forEach(([idx,tot,pax,pr])=>{
       const te=mi.reduce((s,j)=>s+((Array.isArray(tot)?tot[j]:0)||0),0);
@@ -603,10 +605,11 @@ function renderNadi(d){
         <span class="fc" id="nfc"></span>
       </div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th style="width:28px">#</th><th>NADI site</th><th>State</th><th>Status</th><th>Events</th><th>Pax</th><th>Programs</th>
+        <th style="width:28px">#</th><th id="nhNm" style="cursor:pointer;user-select:none" onclick="nSort('nm')">NADI site</th><th id="nhState" style="cursor:pointer;user-select:none" onclick="nSort('state')">State</th><th id="nhSt" style="cursor:pointer;user-select:none" onclick="nSort('st')">Status</th><th id="nhTe" style="cursor:pointer;user-select:none" onclick="nSort('te')">Events</th><th id="nhTp" style="cursor:pointer;user-select:none" onclick="nSort('tp')">Pax</th><th>Programs</th>
       </tr></thead><tbody id="nTb"></tbody></table></div>
     </div>`;fN2();
 }
+function nSort(k){_nSort=_nSort.k===k?{k,d:-_nSort.d}:{k,d:k==='te'||k==='tp'?-1:1};fN2();}
 function fN2(){
   const d=window._D;if(!d)return;
   const nd=d.nadi,col=COL[nd.mod]||'#555';
@@ -617,7 +620,10 @@ function fN2(){
     if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
     if(st&&r.state!==st)return false;if(sf&&r.st!==sf)return false;return true;
   });
+  if(_nSort.k){const k=_nSort.k,d=_nSort.d;f.sort((a,b)=>{const av=a[k],bv=b[k];return(typeof av==='number'?av-bv:String(av||'').localeCompare(String(bv||'')))*d;});}
   document.getElementById('nfc').textContent=fN(f.length)+' sites';
+  const _NH={nm:'NADI site',state:'State',st:'Status',te:'Events',tp:'Pax'};
+  Object.entries({nm:'nhNm',state:'nhState',st:'nhSt',te:'nhTe',tp:'nhTp'}).forEach(([k,id])=>{const el=document.getElementById(id);if(el)el.textContent=_NH[k]+(_nSort.k===k?(_nSort.d>0?' ↑':' ↓'):'');});
   document.getElementById('nTb').innerHTML=f.map((r,i)=>{
     const sp=r.st==='u'?`<span class="pill p-r">untouched</span>`:r.st==='p'?`<span class="pill p-y">${r.ap}/${r.tp2}</span>`:`<span class="pill p-g">active</span>`;
     const dots=nd.progs.map((_,k)=>`<div class="pdot" style="background:${r.pr[String(k)]?col:'var(--line)'}"></div>`).join('');
@@ -656,12 +662,12 @@ function renderMonthly(d){
   // Row 1: program names spanning 2 cols each
   const hdr1=progs.map((p,pi)=>{
     const pc=PROG_COLORS[pi%PROG_COLORS.length];
-    return `<th colspan="2" style="text-align:center;padding:5px 6px;font-size:9px;font-weight:700;color:${pc};border-left:1px solid var(--line2);white-space:nowrap" title="${ce(p)}">${ce(p.length>14?p.slice(0,13)+'…':p)}</th>`;
+    return `<th colspan="2" data-pi="${pi}" style="text-align:center;padding:5px 6px;font-size:9px;font-weight:700;color:${pc};border-left:1px solid var(--line2);white-space:nowrap" title="${ce(p)}">${ce(p.length>14?p.slice(0,13)+'…':p)}</th>`;
   }).join('');
   // Row 2: Ev/Pax sub-headers per program + Total Ev/Pax
   const hdr2=progs.map((_,pi)=>
-    `<th style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3);border-left:1px solid var(--line2)">Ev</th>`+
-    `<th style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3)">Pax</th>`
+    `<th data-pi="${pi}" style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3);border-left:1px solid var(--line2)">Ev</th>`+
+    `<th data-pi="${pi}" style="text-align:center;padding:3px 5px;font-size:8px;color:var(--t3)">Pax</th>`
   ).join('');
 
   document.getElementById('tB').innerHTML=`
@@ -698,10 +704,10 @@ function renderMonthly(d){
           <thead>
             <tr>
               <th class="f-ref" rowspan="2" style="vertical-align:bottom;border-bottom:2px solid var(--line)">Ref ID</th>
-              <th class="f-nm"  rowspan="2" style="vertical-align:bottom;border-bottom:2px solid var(--line)">NADI site</th>
-              <th class="f-st"  rowspan="2" style="vertical-align:bottom;border-bottom:2px solid var(--line)">State</th>
+              <th id="mhNm" class="f-nm" rowspan="2" style="vertical-align:bottom;border-bottom:2px solid var(--line);cursor:pointer;user-select:none" onclick="mSort('nm')">NADI site</th>
+              <th id="mhState" class="f-st" rowspan="2" style="vertical-align:bottom;border-bottom:2px solid var(--line);cursor:pointer;user-select:none" onclick="mSort('state')">State</th>
               ${hdr1}
-              <th colspan="2" style="text-align:center;padding:5px 6px;font-size:10px;font-weight:700;border-left:2px solid var(--line);white-space:nowrap">Total</th>
+              <th colspan="2" style="text-align:center;padding:5px 6px;font-size:10px;font-weight:700;border-left:2px solid var(--line);white-space:nowrap"><span id="mhTe" style="cursor:pointer;user-select:none" onclick="mSort('te')">Total Ev</span> / <span id="mhTp" style="cursor:pointer;user-select:none" onclick="mSort('tp')">Pax</span></th>
             </tr>
             <tr>
               ${hdr2}
@@ -724,10 +730,10 @@ function renderMonthly(d){
   });
   progs.forEach((_,pi)=>{
     const pc=PROG_COLORS[pi%PROG_COLORS.length];
-    const te=document.createElement('td');te.id='mft_pe'+pi;
+    const te=document.createElement('td');te.id='mft_pe'+pi;te.dataset.pi=pi;
     te.style.cssText='text-align:center;font-size:10px;font-weight:600;color:'+pc+';border-left:1px solid var(--line2);';
     foot.appendChild(te);
-    const tp=document.createElement('td');tp.id='mft_pp'+pi;
+    const tp=document.createElement('td');tp.id='mft_pp'+pi;tp.dataset.pi=pi;
     tp.style.cssText='text-align:center;font-size:10px;color:var(--t2);';
     foot.appendChild(tp);
   });
@@ -766,6 +772,7 @@ function selMonthBar(mi){
   fM();
 }
 
+function mSort(k){_mSort=_mSort.k===k?{k,d:-_mSort.d}:{k,d:k==='te'||k==='tp'?-1:1};fM();}
 function fM(){
   const d=window._D;if(!d)return;
   const nd=d.nadi, sm=d.monthly;
@@ -778,6 +785,12 @@ function fM(){
   const st=(document.getElementById('mst')||{value:''}).value;
   const sf=(document.getElementById('msf')||{value:''}).value;
   const sp=(document.getElementById('mprog')||{value:''}).value;
+
+  // Column visibility: hide non-selected program columns
+  let _cs=document.getElementById('_prog-col-css');
+  if(!_cs){_cs=document.createElement('style');_cs.id='_prog-col-css';document.head.appendChild(_cs);}
+  _cs.textContent=sp!==''?`[data-pi]:not([data-pi="${sp}"]){display:none}`:'';
+
   const mi=_filteredMI;
   const dataMonthIdx=selMonth!==null?(mi?mi[selMonth]:selMonth):null;
 
@@ -789,8 +802,26 @@ function fM(){
     if(sp!==''){const prD=((aMap[r.i]||{}).pr||{})[sp];if(!prD)return false;const ev=prD.ev||[];const hasEv=dataMonthIdx!==null?(ev[dataMonthIdx]||0)>0:mi?mi.some(j=>(ev[j]||0)>0):ev.some(v=>v>0);if(!hasEv)return false;}
     return true;
   });
+  if(_mSort.k){
+    const k=_mSort.k,d2=_mSort.d;
+    f.sort((a,b)=>{
+      let av,bv;
+      if(k==='te'||k==='tp'){
+        const aa=aMap[a.i]||{tot:[],pax:[]},ba=aMap[b.i]||{tot:[],pax:[]};
+        const ak=k==='te'?'tot':'pax';
+        av=dataMonthIdx!==null?(aa[ak][dataMonthIdx]||0):(aa[ak]||[]).reduce((s,v)=>s+(v||0),0);
+        bv=dataMonthIdx!==null?(ba[ak][dataMonthIdx]||0):(ba[ak]||[]).reduce((s,v)=>s+(v||0),0);
+      } else {av=a[k];bv=b[k];}
+      return(typeof av==='number'?av-bv:String(av||'').localeCompare(String(bv||'')))*d2;
+    });
+  }
   document.getElementById('mfc').textContent=fN(f.length)+' sites';
   window._filteredRows=f;
+  // Update sort indicators in Monthly Update headers
+  const _MH={nm:'NADI site',state:'State'};
+  ['nm','state'].forEach(k=>{const el=document.getElementById('mh'+k.charAt(0).toUpperCase()+k.slice(1));if(el)el.textContent=_MH[k]+(_mSort.k===k?(_mSort.d>0?' ↑':' ↓'):'');});
+  const elTe=document.getElementById('mhTe');if(elTe)elTe.textContent='Total Ev'+(_mSort.k==='te'?(_mSort.d>0?' ↑':' ↓'):'');
+  const elTp=document.getElementById('mhTp');if(elTp)elTp.textContent='Pax'+(_mSort.k==='tp'?(_mSort.d>0?' ↑':' ↓'):'');
 
   const footEv=new Array(np).fill(0);
   const footPx=new Array(np).fill(0);
@@ -807,8 +838,8 @@ function fM(){
     grandEv+=totEv; grandPx+=totPx;
     progEv.forEach((v,pi)=>{footEv[pi]+=v;}); progPx.forEach((v,pi)=>{footPx[pi]+=v;});
     const cells=progs.map((_,pi)=>
-      `<td class="${hc(progEv[pi])}" onclick="event.stopPropagation();openProgCell(${r.i},${pi})" style="text-align:center;border-left:1px solid var(--line2);font-weight:${progEv[pi]?600:400};cursor:pointer">${progEv[pi]?fN(progEv[pi]):'·'}</td>`+
-      `<td style="text-align:center;color:var(--t2);font-size:10px">${progPx[pi]?fN(progPx[pi]):'·'}</td>`
+      `<td data-pi="${pi}" class="${hc(progEv[pi])}" onclick="event.stopPropagation();openProgCell(${r.i},${pi})" style="text-align:center;border-left:1px solid var(--line2);font-weight:${progEv[pi]?600:400};cursor:pointer">${progEv[pi]?fN(progEv[pi]):'·'}</td>`+
+      `<td data-pi="${pi}" style="text-align:center;color:var(--t2);font-size:10px">${progPx[pi]?fN(progPx[pi]):'·'}</td>`
     ).join('');
     return `<tr onclick="openMoPanel(${r.i})" id="mi${r.i}" style="cursor:pointer">
       <td class="f-ref">${ce(r.ref)}</td>
