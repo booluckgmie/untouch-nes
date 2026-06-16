@@ -56,12 +56,20 @@ def _arr(ids) -> str:
 # Step 1 — Get event IDs for a given subcategory
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _get_event_ids(conn, subcategory_id: int) -> list:
+def _get_event_ids(
+    conn,
+    subcategory_id: int,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> list:
+    # Prefer explicit args; fall back to module-level globals for CLI usage
+    _start = start_date if start_date is not None else START_DATE
+    _end   = end_date   if end_date   is not None else END_DATE
     date_filter = ""
-    if START_DATE:
-        date_filter += f"\n  AND e.start_datetime::date >= '{START_DATE}'"
-    if END_DATE:
-        date_filter += f"\n  AND e.end_datetime::date   <= '{END_DATE}'"
+    if _start:
+        date_filter += f"\n  AND e.start_datetime::date >= '{_start}'"
+    if _end:
+        date_filter += f"\n  AND e.end_datetime::date   <= '{_end}'"
     with conn.cursor() as cur:
         cur.execute(f"""
             SELECT DISTINCT e.id
