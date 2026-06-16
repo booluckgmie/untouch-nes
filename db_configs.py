@@ -1,6 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # db_configs.py  — connection factory for NES Analytics
 # ─────────────────────────────────────────────────────────────────────────────
+import os
 import psycopg2
 import psycopg2.extras
 from credential import DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
