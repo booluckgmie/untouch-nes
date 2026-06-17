@@ -499,7 +499,10 @@ def build_nadi_index(
 
         programs: dict = {}
         if not s.empty:
-            for prog, grp in s.groupby("program"):
+            # sub_id 2 (Lifelong Learning): group by specific event program name
+            # to get CYBERSECURITY, EKELAS, TUISYEN RAKYAT, ESPORT, MAHIR, TINYTECHIES
+            _gcol = "program_name" if sub_id == 2 else "program"
+            for prog, grp in s.groupby(_gcol):
                 if not prog:
                     continue
                 programs[prog] = {
