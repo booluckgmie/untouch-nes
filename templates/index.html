@@ -506,22 +506,24 @@ async function loadSubData(id){
     window._D=r.data;
     buildShell(id);showTab('nadi');
   }catch(e){
+    console.error('loadSubData error:',e);
     document.getElementById('main').innerHTML=`<div class="state-box"><div class="icon">⚠️</div><p>Load failed: ${e.message}</p><button onclick="loadSubData(${id})" style="margin-top:8px;padding:4px 12px;cursor:pointer">Retry</button></div>`;
   }
 }
 
 function buildShell(id){
-  const d=window._D,nd=d.nadi,col=COL[nd.mod]||'#555',lbl=nd.mod==='LifelongLearning'?'Lifelong Learning':nd.mod;
-  const s=SUBS[id]||{};const totZ=d.weekly.zero.length;
+  const d=window._D,nd=d.nadi||{},col=COL[nd.mod]||'#555',lbl=nd.mod==='LifelongLearning'?'Lifelong Learning':nd.mod||'';
+  const _progs=nd.progs||[],_npl=_progs.length;
+  const s=SUBS[id]||{};const totZ=((d.weekly||{}).zero||[]).length;
   const _MN={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
   const _qtrs=new Set((d.monthly&&d.monthly.months||[]).map(m=>{const[mn,yr]=(m||'').split(' ');return yr+'-Q'+Math.ceil((_MN[mn]||1)/3);}));
   const _thresh=3*Math.max(1,_qtrs.size);
-  const aMap={};nd.rows.forEach(([i,e,p,pr])=>aMap[i]={e,p,pr});
+  const aMap={};(nd.rows||[]).forEach(([i,e,p,pr])=>aMap[i]={e,p,pr});
   tRowsAll=NI.map((n,i)=>{
     const[ref,nm,state,stp='',sdusp='']=n,a=aMap[i];
     const te=a?a.e:0,tp=a?a.p:0,pr=a?a.pr:{};
     const ap=Object.keys(pr).length;
-    return{i,ref,nm,state,stp:String(stp||'').trim(),sdusp:String(sdusp||'').trim(),te,tp,pr,ap,tp2:nd.progs.length,st:te<_thresh?'u':ap<nd.progs.length?'p':'a'};
+    return{i,ref,nm,state,stp:String(stp||'').trim(),sdusp:String(sdusp||'').trim(),te,tp,pr,ap,tp2:_npl,st:te<_thresh?'u':ap<_npl?'p':'a'};
   });
   const _nxr=(f=>{const m=/(\d+)\s+(\w+)\s+(\d+),\s+(\d+):(\d+)/.exec(f||'');if(!m)return'—';const D=new Date(+m[3],{Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11}[m[2]]||0,+m[1],+m[4],+m[5]+5);return m[1]+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][D.getMonth()]+' '+D.getFullYear()+', '+String(D.getHours()).padStart(2,'0')+':'+String(D.getMinutes()).padStart(2,'0');})(d.fetched);
   document.getElementById('main').innerHTML=`
@@ -529,7 +531,7 @@ function buildShell(id){
       <div class="bc">NES &rsaquo; <a onclick="gOv(document.getElementById('navOv'))">Overview</a> &rsaquo; ${nd.cat} &rsaquo; <span>${ce(lbl)}</span></div>
       <div class="page-hdr">
         <div><div class="page-title"><span class="${nd.cat==='NADI4U'?'cat-4u':'cat-2u'}">${nd.cat}</span>${ce(lbl)}</div>
-        <div class="page-sub">${nd.progs.map(p=>ce(p)).join(' &nbsp;·&nbsp; ')}</div></div>
+        <div class="page-sub">${_progs.map(p=>ce(p)).join(' &nbsp;·&nbsp; ')}</div></div>
         <div class="page-meta">Live DB &nbsp;·&nbsp; Fetched: ${d.fetched||'today'}<br>Next refresh: ${_nxr} &nbsp;·&nbsp; ${d.start_date||d.end_date?`${d.start_date||'…'} → ${d.end_date||'…'}`:'All dates'}${d.programs_filter&&d.programs_filter.length?` &nbsp;·&nbsp; ${d.programs_filter.length} prog`:''}</div>
       </div>
     </div>
@@ -552,20 +554,21 @@ function showTab(t){
 
 /* ── NADI INDEX ── */
 function renderNadi(d){
-  const nd=d.nadi,col=COL[nd.mod]||'#555';
+  const nd=d.nadi||{},col=COL[nd.mod]||'#555';
+  const _progs=nd.progs||[];
   document.getElementById('tB').innerHTML=`
     <div class="kpi-row">
-      <div class="kpi"><div class="kpi-l">Events</div><div class="kpi-v" style="color:${col}">${fN(nd.e)}</div><div class="kpi-s">${nd.progs.length} programs</div></div>
+      <div class="kpi"><div class="kpi-l">Events</div><div class="kpi-v" style="color:${col}">${fN(nd.e)}</div><div class="kpi-s">${_progs.length} programs</div></div>
       <div class="kpi"><div class="kpi-l">Pax</div><div class="kpi-v">${fN(nd.p)}</div><div class="kpi-s">registrations</div></div>
-      <div class="kpi"><div class="kpi-l">Active NADI</div><div class="kpi-v" style="color:var(--green)">${nd.a}</div><div class="kpi-s">${Math.round(nd.a/1099*100)}% of 1,099</div></div>
-      <div class="kpi"><div class="kpi-l">Untouched</div><div class="kpi-v" style="color:var(--red)">${nd.u}</div><div class="kpi-s">&lt;3 events/quarter</div></div>
+      <div class="kpi"><div class="kpi-l">Active NADI</div><div class="kpi-v" style="color:var(--green)">${nd.a||0}</div><div class="kpi-s">${Math.round((nd.a||0)/1099*100)}% of 1,099</div></div>
+      <div class="kpi"><div class="kpi-l">Untouched</div><div class="kpi-v" style="color:var(--red)">${nd.u||0}</div><div class="kpi-s">&lt;3 events/quarter</div></div>
     </div>
     <div class="content">
       <div class="toolbar">
         <input id="nq" placeholder="Search NADI name or ref ID…" oninput="fN2()">
         <select id="nst" onchange="fN2()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
         <select id="nsf" onchange="fN2()"><option value="">All status</option><option value="a">Active</option><option value="p">Partial</option><option value="u">Untouched</option></select>
-        <select id="nprog" onchange="fN2()"><option value="">All programs</option>${nd.progs.map((p,k)=>`<option value="${k}">${ce(p)}</option>`).join('')}</select>
+        <select id="nprog" onchange="fN2()"><option value="">All programs</option>${_progs.map((p,k)=>`<option value="${k}">${ce(p)}</option>`).join('')}</select>
         <select id="ntp" onchange="fN2()"><option value="">All TP</option>${(window._tpOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
         <select id="ndusp" onchange="fN2()"><option value="">All DUSP</option>${(window._duspOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
         <span class="fc" id="nfc"></span>
@@ -578,7 +581,8 @@ function renderNadi(d){
 function nSort(k){_nSort=_nSort.k===k?{k,d:-_nSort.d}:{k,d:k==='te'||k==='tp'?-1:1};fN2();}
 function fN2(){
   const d=window._D;if(!d)return;
-  const nd=d.nadi,col=COL[nd.mod]||'#555';
+  const nd=d.nadi||{},col=COL[nd.mod]||'#555';
+  const _progs=nd.progs||[];
   const q=(document.getElementById('nq')||{value:''}).value.toLowerCase();
   const st=(document.getElementById('nst')||{value:''}).value;
   const sf=(document.getElementById('nsf')||{value:''}).value;
@@ -599,7 +603,7 @@ function fN2(){
   Object.entries({nm:'nhNm',state:'nhState',st:'nhSt',te:'nhTe',tp:'nhTp'}).forEach(([k,id])=>{const el=document.getElementById(id);if(el)el.textContent=_NH[k]+(_nSort.k===k?(_nSort.d>0?' ↑':' ↓'):'');});
   document.getElementById('nTb').innerHTML=f.map((r,i)=>{
     const sp=r.st==='u'?`<span class="pill p-r">untouched</span>`:r.st==='p'?`<span class="pill p-y">${r.ap}/${r.tp2}</span>`:`<span class="pill p-g">active</span>`;
-    const dots=nd.progs.map((_,k)=>`<div class="pdot" style="background:${r.pr[String(k)]?col:'var(--line)'}"></div>`).join('');
+    const dots=_progs.map((_,k)=>`<div class="pdot" style="background:${r.pr[String(k)]?col:'var(--line)'}"></div>`).join('');
     return `<tr onclick="openPanel(${r.i})" id="ri${r.i}">
       <td style="color:var(--t3);font-size:10px">${i+1}</td>
       <td><div style="font-weight:${r.te?600:400};color:${r.te?'var(--t1)':'var(--t3)'}">${ce(r.nm)}</div><div style="font-size:10px;color:var(--t3)">${r.ref}</div></td>
