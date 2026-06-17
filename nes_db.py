@@ -499,7 +499,7 @@ def build_nadi_index(
 
         programs: dict = {}
         if not s.empty:
-            for prog, grp in s.groupby("program_name"):
+            for prog, grp in s.groupby("program"):
                 if not prog:
                     continue
                 programs[prog] = {
