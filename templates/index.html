@@ -635,10 +635,10 @@ function renderNadi(d){
   const _isFiltered=!!_filteredMI;
   document.getElementById('tB').innerHTML=`
     <div class="kpi-row">
-      <div class="kpi"><div class="kpi-l">Events${_isFiltered?' <span style="font-size:8px;color:var(--purple)">(filtered)</span>':''}</div><div class="kpi-v" style="color:${col}">${fN(_fE)}</div><div class="kpi-s">${_progs.length} programs</div></div>
-      <div class="kpi"><div class="kpi-l">Pax</div><div class="kpi-v">${fN(_fP)}</div><div class="kpi-s">registrations</div></div>
-      <div class="kpi"><div class="kpi-l">Active NADI</div><div class="kpi-v" style="color:var(--green)">${_fA}</div><div class="kpi-s">${Math.round(_fA/1099*100)}% of 1,099</div></div>
-      <div class="kpi"><div class="kpi-l">Untouched</div><div class="kpi-v" style="color:var(--red)">${_fU}</div><div class="kpi-s">&lt;3 events/quarter</div></div>
+      <div class="kpi"><div class="kpi-l">Events</div><div class="kpi-v" id="nkpiE" style="color:${col}">${fN(_fE)}</div><div class="kpi-s">${_progs.length} programs</div></div>
+      <div class="kpi"><div class="kpi-l">Pax</div><div class="kpi-v" id="nkpiP">${fN(_fP)}</div><div class="kpi-s">registrations</div></div>
+      <div class="kpi"><div class="kpi-l">Active NADI</div><div class="kpi-v" id="nkpiA" style="color:var(--green)">${_fA}</div><div class="kpi-s" id="nkpiAS">${Math.round(_fA/1099*100)}% of 1,099</div></div>
+      <div class="kpi"><div class="kpi-l">Untouched</div><div class="kpi-v" id="nkpiU" style="color:var(--red)">${_fU}</div><div class="kpi-s">&lt;3 events/quarter</div></div>
     </div>
     <div class="content">
       <div class="toolbar">
@@ -670,6 +670,13 @@ function fN2(){
   });
   if(_nSort.k){const k=_nSort.k,d=_nSort.d;f.sort((a,b)=>{const av=a[k],bv=b[k];return(typeof av==='number'?av-bv:String(av||'').localeCompare(String(bv||'')))*d;});}
   document.getElementById('nfc').textContent=fN(f.length)+' sites';
+  const _fEv=f.reduce((s,r)=>s+r.te,0),_fPx=f.reduce((s,r)=>s+r.tp,0);
+  const _fAc=f.filter(r=>r.te>0).length,_fUn=f.filter(r=>r.te===0).length;
+  const _kE=document.getElementById('nkpiE');if(_kE)_kE.textContent=fN(_fEv);
+  const _kP=document.getElementById('nkpiP');if(_kP)_kP.textContent=fN(_fPx);
+  const _kA=document.getElementById('nkpiA');if(_kA)_kA.textContent=String(_fAc);
+  const _kAS=document.getElementById('nkpiAS');if(_kAS)_kAS.textContent=Math.round(_fAc/1099*100)+'% of 1,099';
+  const _kU=document.getElementById('nkpiU');if(_kU)_kU.textContent=String(_fUn);
   const _NH={nm:'NADI site',state:'State',st:'Status',te:'Events',tp:'Pax'};
   Object.entries({nm:'nhNm',state:'nhState',st:'nhSt',te:'nhTe',tp:'nhTp'}).forEach(([k,id])=>{const el=document.getElementById(id);if(el)el.textContent=_NH[k]+(_nSort.k===k?(_nSort.d>0?' ↑':' ↓'):'');});
   document.getElementById('nTb').innerHTML=f.map((r,i)=>{
@@ -704,13 +711,12 @@ function renderMonthly(d){
 
   // Sub-pillar config: group programs into named pillars per subcategory
   const PILL_CFG={2:[
-    {name:'NURTURE',    info:'CYBERSECURITY · EKELAS · TUISYEN RAKYAT', progs:['NADI-Nurture']},
-    {name:'SKILLFORGE', info:'ESPORT · MAHIR',                          progs:['NADI-SkillForge']},
-    {name:'TINYTECHIES',info:'NADI-TinyTechies',                        progs:['NADI-TinyTechies']},
+    {name:'NURTURE',     progs:['CYBERSECURITY','EKELAS','TUISYEN RAKYAT','NADI-Nurture']},
+    {name:'SKILLFORGE',  progs:['ESPORT','MAHIR','NADI-SkillForge']},
+    {name:'TINYTECHIES', progs:['TINYTECHIES','NADI-TinyTechies']},
   ]};
-  const pillars=(PILL_CFG[d.sub_id]||[]).length
-    ?(PILL_CFG[d.sub_id]).map(pl=>({name:pl.name,info:pl.info||'',pis:pl.progs.map(pn=>progs.indexOf(pn)).filter(i=>i>=0)}))
-    :null;
+  const _pRaw=(PILL_CFG[d.sub_id]||[]).map(pl=>({name:pl.name,pis:pl.progs.map(pn=>progs.indexOf(pn)).filter(i=>i>=0)})).filter(pl=>pl.pis.length>0);
+  const pillars=_pRaw.length?_pRaw:null;
   const piToPl={};
   if(pillars) pillars.forEach((pl,pli)=>pl.pis.forEach(pi=>{piToPl[pi]=pli;}));
   const displayPis=pillars?pillars.flatMap(pl=>pl.pis):progs.map((_,pi)=>pi);
@@ -770,7 +776,7 @@ function renderMonthly(d){
       <div class="kpi"><div class="kpi-l">Period</div><div class="kpi-v" style="font-size:14px;font-weight:600">${months[0]||'—'}</div><div class="kpi-s">to ${months[months.length-1]||'—'}</div></div>
       <div class="kpi"><div class="kpi-l">Months</div><div class="kpi-v" style="color:${col}">${nm}</div><div class="kpi-s">reporting periods</div></div>
       <div class="kpi"><div class="kpi-l">Programs</div><div class="kpi-v" style="color:${col}">${np}</div><div class="kpi-s">in this subcategory</div></div>
-      <div class="kpi"><div class="kpi-l">Active NADI</div><div class="kpi-v" style="color:var(--green)">${tRowsAll.filter(r=>r.te>0).length}</div><div class="kpi-s">of 1,099</div></div>
+      <div class="kpi"><div class="kpi-l">Active NADI</div><div class="kpi-v" id="mKpiA" style="color:var(--green)">${tRowsAll.filter(r=>r.te>0).length}</div><div class="kpi-s">of 1,099</div></div>
     </div>
     <div style="padding:0 24px 8px;flex-shrink:0">
       <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:700">Events by month (all programs)</div>
@@ -907,7 +913,7 @@ function fM(){
   const piToPl=window._mPiToPl||{};
   const footEv={},footPx={};
   displayPis.forEach(pi=>{footEv[pi]=0;footPx[pi]=0;});
-  let grandEv=0, grandPx=0;
+  let grandEv=0, grandPx=0, _mActive=0;
 
   // sp filter: hide rows where selected program has no events
   const _spFilter=(r)=>{
@@ -929,6 +935,7 @@ function fM(){
     });
     const totEv=displayPis.reduce((s,pi)=>s+perEv[pi],0);
     const totPx=displayPis.reduce((s,pi)=>s+perPx[pi],0);
+    if(totEv>0)_mActive++;
     grandEv+=totEv; grandPx+=totPx;
     displayPis.forEach(pi=>{footEv[pi]+=perEv[pi];footPx[pi]+=perPx[pi];});
     const cells=displayPis.map(pi=>{
@@ -953,6 +960,7 @@ function fM(){
   });
   const ge=document.getElementById('mft_gev');if(ge)ge.textContent=grandEv?fN(grandEv):'—';
   const gp=document.getElementById('mft_gpx');if(gp)gp.textContent=grandPx?fN(grandPx):'—';
+  const _mKA=document.getElementById('mKpiA');if(_mKA)_mKA.textContent=String(_mActive);
 }
 
 function openMoPanel(nadi_idx){
@@ -1091,10 +1099,10 @@ function renderWeekly(d){
   const ut=NI.filter(n=>!activeRefs.has(n[0]));
   document.getElementById('tB').innerHTML=`
     <div class="kpi-row">
-      <div class="kpi"><div class="kpi-l">Total events</div><div class="kpi-v" style="color:${col}">${fN(totEv)}</div><div class="kpi-s">${weeks.length} weeks</div></div>
-      <div class="kpi"><div class="kpi-l">Zero attended</div><div class="kpi-v" style="color:var(--red)">${fN(totZ)}</div><div class="kpi-s">${totEv?Math.round(totZ/totEv*100):0}%</div></div>
-      <div class="kpi"><div class="kpi-l">Partial</div><div class="kpi-v" style="color:var(--amber)">${fN(totP)}</div><div class="kpi-s">${totEv?Math.round(totP/totEv*100):0}%</div></div>
-      <div class="kpi"><div class="kpi-l">Complete</div><div class="kpi-v" style="color:var(--green)">${fN(totC)}</div><div class="kpi-s">${totEv?Math.round(totC/totEv*100):0}%</div></div>
+      <div class="kpi"><div class="kpi-l">Total events</div><div class="kpi-v" id="wkKpiEv" style="color:${col}">${fN(totEv)}</div><div class="kpi-s">${weeks.length} weeks</div></div>
+      <div class="kpi"><div class="kpi-l">Zero attended</div><div class="kpi-v" id="wkKpiZ" style="color:var(--red)">${fN(totZ)}</div><div class="kpi-s" id="wkKpiZS">${totEv?Math.round(totZ/totEv*100):0}%</div></div>
+      <div class="kpi"><div class="kpi-l">Partial</div><div class="kpi-v" id="wkKpiP" style="color:var(--amber)">${fN(totP)}</div><div class="kpi-s" id="wkKpiPS">${totEv?Math.round(totP/totEv*100):0}%</div></div>
+      <div class="kpi"><div class="kpi-l">Complete</div><div class="kpi-v" id="wkKpiC" style="color:var(--green)">${fN(totC)}</div><div class="kpi-s" id="wkKpiCS">${totEv?Math.round(totC/totEv*100):0}%</div></div>
     </div>
     <div class="content">
       <div style="display:flex;gap:0;border-bottom:1px solid var(--line2);margin-bottom:8px;flex-shrink:0">
@@ -1320,6 +1328,11 @@ function fWkN(){
   }).sort((a,b)=>b.z-a.z||a.nm.localeCompare(b.nm));
   const _ctx=selWeek?' · '+selWeek:selMonth?' · '+((_monthSeq[selMonth]||{}).label||selMonth):'· all weeks';
   document.getElementById('wkfc').textContent=rows.length+' NADI'+_ctx;
+  const _wEv=rows.reduce((s,r)=>s+r.tot,0),_wZ=rows.reduce((s,r)=>s+r.z,0),_wP=rows.reduce((s,r)=>s+r.p,0),_wC=rows.reduce((s,r)=>s+r.c,0);
+  [['wkKpiEv',_wEv],['wkKpiZ',_wZ],['wkKpiP',_wP],['wkKpiC',_wC]].forEach(([eid,v])=>{const el=document.getElementById(eid);if(el)el.textContent=fN(v);});
+  const _wZS=document.getElementById('wkKpiZS');if(_wZS)_wZS.textContent=(_wEv?Math.round(_wZ/_wEv*100):0)+'%';
+  const _wPS=document.getElementById('wkKpiPS');if(_wPS)_wPS.textContent=(_wEv?Math.round(_wP/_wEv*100):0)+'%';
+  const _wCS=document.getElementById('wkKpiCS');if(_wCS)_wCS.textContent=(_wEv?Math.round(_wC/_wEv*100):0)+'%';
   document.getElementById('wkNTb').innerHTML=rows.map((r,i)=>`
     <tr onclick="oWkNP('${r.ref}')" id="wkr_${r.ref.replace(/[^a-z0-9]/gi,'_')}">
       <td style="color:var(--t3);font-size:10px">${i+1}</td>
@@ -1426,6 +1439,11 @@ function fBnN(){
   }).sort((a,b)=>b.z-a.z||a.nm.localeCompare(b.nm));
 
   document.getElementById('bnfc').textContent=fN(f.length)+' sites';
+  const _bEv=f.reduce((s,r)=>s+r.tot,0),_bZ=f.reduce((s,r)=>s+r.z,0),_bP=f.reduce((s,r)=>s+r.p,0),_bC=f.reduce((s,r)=>s+r.c,0);
+  [['wkKpiEv',_bEv],['wkKpiZ',_bZ],['wkKpiP',_bP],['wkKpiC',_bC]].forEach(([eid,v])=>{const el=document.getElementById(eid);if(el)el.textContent=fN(v);});
+  const _bZS=document.getElementById('wkKpiZS');if(_bZS)_bZS.textContent=(_bEv?Math.round(_bZ/_bEv*100):0)+'%';
+  const _bPS=document.getElementById('wkKpiPS');if(_bPS)_bPS.textContent=(_bEv?Math.round(_bP/_bEv*100):0)+'%';
+  const _bCS=document.getElementById('wkKpiCS');if(_bCS)_bCS.textContent=(_bEv?Math.round(_bC/_bEv*100):0)+'%';
   document.getElementById('bnTb').innerHTML=f.map((r,i)=>`
     <tr onclick="oBnP('${r.ref}')" id="bnr_${r.ref.replace(/[^a-z0-9]/gi,'_')}">
       <td style="color:var(--t3);font-size:10px">${i+1}</td>
