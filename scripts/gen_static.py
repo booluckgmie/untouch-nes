@@ -31,25 +31,16 @@ if not SITES_FILE.exists():
     print("all_sites.json missing — regenerating from DB…")
     conn = get_conn()
     with conn.cursor() as cur:
-        # Diagnostic: print nd_site_profile columns to identify tp/dusp names.
-        cur.execute("""
-            SELECT column_name, data_type
-            FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'nd_site_profile'
-            ORDER BY ordinal_position
-        """)
-        print("nd_site_profile columns:", [r[0] for r in cur.fetchall()])
-
-        # TODO: replace ''::text with correct column refs once names confirmed.
         cur.execute("""
             SELECT ns.refid_mcmc,
                    COALESCE(nsp.sitename, 'Site-' || ns.id::text),
                    COALESCE(st.name, ''),
-                   ''::text AS tp,
-                   ''::text AS dusp
+                   COALESCE(org.name, '')        AS tp,
+                   COALESCE(org.description, '') AS dusp
             FROM public.nd_site ns
             LEFT JOIN public.nd_site_profile nsp ON nsp.id = ns.site_profile_id
-            LEFT JOIN public.nd_state st ON st.id = nsp.state_id
+            LEFT JOIN public.nd_state st         ON st.id  = nsp.state_id
+            LEFT JOIN public.organizations org   ON org.id = nsp.dusp_tp_id
             WHERE ns.refid_mcmc IS NOT NULL
             ORDER BY COALESCE(st.name,''), COALESCE(nsp.sitename,'')
         """)
@@ -60,7 +51,7 @@ if not SITES_FILE.exists():
     print(f"  Written {len(rows)} sites -> {SITES_FILE}")
 
 sites = json.loads(SITES_FILE.read_text(encoding="utf-8"))["sites"]
-df_sites = pd.DataFrame(sites, columns=["refid_mcmc", "nadi_name", "state"])
+df_sites = pd.DataFrame(sites, columns=["refid_mcmc", "nadi_name", "state", "tp", "dusp"])
 
 START_DATE = "2026-01-01"
 
