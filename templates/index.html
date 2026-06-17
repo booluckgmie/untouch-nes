@@ -291,7 +291,7 @@ function closeSb(){
 async function boot(){
   try{
     const[rS,rN]=await Promise.all([fetch('/api/subcategories').then(r=>r.json()),fetch('/api/sites').then(r=>r.json())]);
-    if(rN.ok){NI=rN.sites;STATES=[...new Set(NI.map(n=>n[2]))].filter(Boolean).sort();window._tpOpts=[...new Set(NI.map(n=>String(n[3]||'').trim()).filter(Boolean))].sort();window._duspOpts=[...new Set(NI.map(n=>String(n[4]||'').trim()).filter(Boolean))].sort();window._niMap=Object.fromEntries(NI.map(n=>[n[0],n]));}
+    if(rN.ok){NI=rN.sites;STATES=[...new Set(NI.map(n=>n[2]))].filter(Boolean).sort();window._niMap=Object.fromEntries(NI.map(n=>[n[0],n]));}
     if(rS.ok) rS.subcategories.forEach(s=>{SUBS[s.id]=s;});
     buildNav(); gOv(document.getElementById('navOv'));
     document.querySelector('.sb-nav').addEventListener('click',()=>{if(window.innerWidth<=768)closeSb();});
@@ -646,8 +646,6 @@ function renderNadi(d){
         <select id="nst" onchange="fN2()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
         <select id="nsf" onchange="fN2()"><option value="">All status</option><option value="a">Active</option><option value="p">Partial</option><option value="u">Untouched</option></select>
         <select id="nprog" onchange="fN2()"><option value="">All programs</option>${_progs.map((p,k)=>`<option value="${k}">${ce(p)}</option>`).join('')}</select>
-        <select id="ntp" onchange="fN2()"><option value="">All TP</option>${(window._tpOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
-        <select id="ndusp" onchange="fN2()"><option value="">All DUSP</option>${(window._duspOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
         <span class="fc" id="nfc"></span>
       </div>
       <div class="tbl-wrap"><table><thead><tr>
@@ -664,14 +662,10 @@ function fN2(){
   const st=(document.getElementById('nst')||{value:''}).value;
   const sf=(document.getElementById('nsf')||{value:''}).value;
   const np=(document.getElementById('nprog')||{value:''}).value;
-  const ntp=(document.getElementById('ntp')||{value:''}).value;
-  const ndusp=(document.getElementById('ndusp')||{value:''}).value;
   const f=tRowsAll.filter(r=>{
     if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
     if(st&&r.state!==st)return false;if(sf&&r.st!==sf)return false;
     if(np&&!r.pr[np])return false;
-    if(ntp&&r.stp!==ntp)return false;
-    if(ndusp&&r.sdusp!==ndusp)return false;
     return true;
   });
   if(_nSort.k){const k=_nSort.k,d=_nSort.d;f.sort((a,b)=>{const av=a[k],bv=b[k];return(typeof av==='number'?av-bv:String(av||'').localeCompare(String(bv||'')))*d;});}
@@ -797,8 +791,6 @@ function renderMonthly(d){
         <select id="mst" onchange="fM()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
         <select id="msf" onchange="fM()"><option value="">All NADI</option><option value="a">Active only</option><option value="u">Untouched only</option></select>
         <select id="mprog" onchange="fM()"><option value="">All programs</option>${progOpts}</select>
-        <select id="mtp" onchange="fM()"><option value="">All TP</option>${(window._tpOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
-        <select id="mdusp" onchange="fM()"><option value="">All DUSP</option>${(window._duspOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
         <span class="fc" id="mfc"></span>
       </div>
       <div class="tbl-wrap">
@@ -877,8 +869,6 @@ function fM(){
   const st=(document.getElementById('mst')||{value:''}).value;
   const sf=(document.getElementById('msf')||{value:''}).value;
   const sp=(document.getElementById('mprog')||{value:''}).value;
-  const mtp=(document.getElementById('mtp')||{value:''}).value;
-  const mdusp=(document.getElementById('mdusp')||{value:''}).value;
 
   // Column visibility: hide non-selected program columns
   let _cs=document.getElementById('_prog-col-css');
@@ -890,8 +880,6 @@ function fM(){
     if(st&&r.state!==st)return false;
     if(sf==='a'&&r.st==='u')return false;
     if(sf==='u'&&r.st!=='u')return false;
-    if(mtp&&r.stp!==mtp)return false;
-    if(mdusp&&r.sdusp!==mdusp)return false;
     return true;
   });
   if(_mSort.k){
@@ -1292,8 +1280,6 @@ function rWkByWeek(wk,nd){
           <select id="wkst" onchange="fWkN()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
           <select id="wkpr" onchange="fWkN()"><option value="">All programs</option>${(nd.progs||[...new Set(Object.values(wk.nw).flatMap(refs=>Object.values(refs).flat().map(e=>e.pr)).filter(Boolean))].sort()).map(p=>`<option value="${ce(p)}">${ce(p)}</option>`).join('')}</select>
           <select id="wksf" onchange="fWkN()"><option value="">All</option><option value="z">Has zero</option><option value="c">All complete</option></select>
-          <select id="wktp" onchange="fWkN()"><option value="">All TP</option>${(window._tpOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
-          <select id="wkdusp" onchange="fWkN()"><option value="">All DUSP</option>${(window._duspOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
           <span class="fc" id="wkfc"></span>
         </div>
         <div class="tbl-wrap"><table><thead><tr>
@@ -1318,8 +1304,6 @@ function fWkN(){
   const st=(document.getElementById('wkst')||{value:''}).value;
   const pr=(document.getElementById('wkpr')||{value:''}).value;
   const sf=(document.getElementById('wksf')||{value:''}).value;
-  const wktp=(document.getElementById('wktp')||{value:''}).value;
-  const wkdusp=(document.getElementById('wkdusp')||{value:''}).value;
   let rows=Object.entries(nw).map(([ref,evs])=>{
     // filter events by program first if selected
     const fevs=pr?evs.filter(e=>e.pr===pr):evs;
@@ -1332,8 +1316,6 @@ function fWkN(){
     if(!r)return false;
     if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
     if(st&&r.state!==st)return false;if(sf==='z'&&r.z===0)return false;if(sf==='c'&&(r.z>0||r.p>0))return false;
-    if(wktp&&r.stp!==wktp)return false;
-    if(wkdusp&&r.sdusp!==wkdusp)return false;
     return true;
   }).sort((a,b)=>b.z-a.z||a.nm.localeCompare(b.nm));
   const _ctx=selWeek?' · '+selWeek:selMonth?' · '+((_monthSeq[selMonth]||{}).label||selMonth):'· all weeks';
@@ -1388,8 +1370,6 @@ function rWkByNadi(wk,nd){
           <select id="bnst" onchange="fBnN()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
           <select id="bnpr" onchange="fBnN()"><option value="">All programs</option>${(nd.progs||[...new Set(Object.values(wk.nw).flatMap(refs=>Object.values(refs).flat().map(e=>e.pr)).filter(Boolean))].sort()).map(p=>`<option value="${ce(p)}">${ce(p)}</option>`).join('')}</select>
           <select id="bnsf" onchange="fBnN()"><option value="">All status</option><option value="z">Has zero</option><option value="ok">All complete</option><option value="ut">Untouched</option></select>
-          <select id="bntp" onchange="fBnN()"><option value="">All TP</option>${(window._tpOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
-          <select id="bndusp" onchange="fBnN()"><option value="">All DUSP</option>${(window._duspOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
           <span class="fc" id="bnfc"></span>
         </div>
         <div class="tbl-wrap"><table><thead><tr>
@@ -1411,8 +1391,6 @@ function fBnN(){
   const st=(document.getElementById('bnst')||{value:''}).value;
   const pr=(document.getElementById('bnpr')||{value:''}).value;
   const sf=(document.getElementById('bnsf')||{value:''}).value;
-  const bntp=(document.getElementById('bntp')||{value:''}).value;
-  const bndusp=(document.getElementById('bndusp')||{value:''}).value;
 
   // Rebuild nadiMap fresh — so program filter correctly recounts zeros/completes
   const nadiMap={};
@@ -1444,8 +1422,6 @@ function fBnN(){
     if(sf==='z'&&r.z===0)return false;
     if(sf==='ok'&&(r.z>0||r.p>0||r.ut))return false;
     if(sf==='ut'&&!r.ut)return false;
-    if(bntp&&r.stp!==bntp)return false;
-    if(bndusp&&r.sdusp!==bndusp)return false;
     return true;
   }).sort((a,b)=>b.z-a.z||a.nm.localeCompare(b.nm));
 
@@ -1512,8 +1488,6 @@ function rWkByEvent(wk,nd){
       <select id="evWk" onchange="fWkEv()"><option value="">All weeks</option>${wks.map(wkk=>{const wm=wk.weeks.find(w=>w.k===wkk);return`<option value="${wkk}">${wkk}${wm?' — '+wm.l.slice(0,15):''}</option>`;}).join('')}</select>
       <select id="evSt" onchange="fWkEv()"><option value="">All states</option>${sts.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
       <select id="evPr" onchange="fWkEv()"><option value="">All programs</option>${prs.map(p=>`<option value="${ce(p)}">${ce(p)}</option>`).join('')}</select>
-      <select id="evtp" onchange="fWkEv()"><option value="">All TP</option>${(window._tpOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
-      <select id="evdusp" onchange="fWkEv()"><option value="">All DUSP</option>${(window._duspOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
       <input id="evQ" placeholder="Search NADI…" oninput="fWkEv()">
       <span class="fc" id="evFc"></span>
     </div>
@@ -1530,9 +1504,6 @@ function fWkEv(){
   const st=(document.getElementById('evSt')||{value:''}).value;
   const pr=(document.getElementById('evPr')||{value:''}).value;
   const q=(document.getElementById('evQ')||{value:''}).value.toLowerCase();
-  const evtp=(document.getElementById('evtp')||{value:''}).value;
-  const evdusp=(document.getElementById('evdusp')||{value:''}).value;
-  const _niMap=window._niMap||{};
   const _evAllow=selWeek?new Set([selWeek]):selMonth?new Set((_monthSeq[selMonth]||{}).wks||[]):null;
   const f=wk.zero.filter(e=>{
     if(_evAllow&&!_evAllow.has(e.wk))return false;
@@ -1540,7 +1511,6 @@ function fWkEv(){
     if(st&&e.s!==st)return false;
     if(pr&&e.pr!==pr)return false;
     if(q&&!e.nm.toLowerCase().includes(q)&&!e.ref.toLowerCase().includes(q))return false;
-    if(evtp||evdusp){const ni=_niMap[e.ref]||[];if(evtp&&String(ni[3]||'').trim()!==evtp)return false;if(evdusp&&String(ni[4]||'').trim()!==evdusp)return false;}
     return true;
   }).sort((a,b)=>a.wk.localeCompare(b.wk)||a.s.localeCompare(b.s)||a.nm.localeCompare(b.nm));
   document.getElementById('evFc').textContent=fN(f.length)+' events';

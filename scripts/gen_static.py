@@ -32,26 +32,39 @@ if not SITES_FILE.exists():
     conn = get_conn()
     with conn.cursor() as cur:
         cur.execute("""
-            SELECT ns.refid_mcmc,
-                   COALESCE(nsp.sitename, 'Site-' || ns.id::text),
-                   COALESCE(st.name, ''),
-                   COALESCE(org.name, '')        AS tp,
-                   COALESCE(org.description, '') AS dusp
+            SELECT
+                ns.refid_mcmc,
+                COALESCE(nsp.sitename, 'Site-' || ns.id::text)  AS nadi_name,
+                COALESCE(st.name, '')                            AS state,
+                COALESCE(tpd.name, '')                           AS tp,
+                COALESCE(tpd.description, '')                    AS dusp,
+                COALESCE(reg.bm, '')                             AS region_bm,
+                COALESCE(ph.name, '')                            AS phase_name,
+                COALESCE(parl.name, '')                          AS parliament_name,
+                COALESCE(dun.name, '')                           AS dun_name,
+                COALESCE(muk.name, '')                           AS mukim_name
             FROM public.nd_site ns
-            LEFT JOIN public.nd_site_profile nsp ON nsp.id = ns.site_profile_id
-            LEFT JOIN public.nd_state st         ON st.id  = nsp.state_id
-            LEFT JOIN public.organizations org   ON org.id = nsp.dusp_tp_id
+            LEFT JOIN public.nd_site_profile       nsp  ON nsp.id  = ns.site_profile_id
+            LEFT JOIN public.nd_state              st   ON st.id   = nsp.state_id
+            LEFT JOIN public.nd_tech_partner_dusp  tpd  ON tpd.id  = nsp.dusp_tp_id
+            LEFT JOIN public.nd_region             reg  ON reg.id  = nsp.region_id
+            LEFT JOIN public.nd_phases             ph   ON ph.id   = nsp.phase_id
+            LEFT JOIN public.nd_parliaments        parl ON parl.id = nsp.parliament_rfid
+            LEFT JOIN public.nd_duns               dun  ON dun.id  = nsp.dun_rfid
+            LEFT JOIN public.nd_mukims             muk  ON muk.id  = nsp.mukim_id
             WHERE ns.refid_mcmc IS NOT NULL
             ORDER BY COALESCE(st.name,''), COALESCE(nsp.sitename,'')
         """)
         rows = cur.fetchall()
     conn.close()
     SITES_FILE.parent.mkdir(parents=True, exist_ok=True)
-    SITES_FILE.write_text(json.dumps({"sites": [[r[0],r[1],r[2],r[3],r[4]] for r in rows]}), encoding="utf-8")
+    SITES_FILE.write_text(json.dumps({"sites": [list(r) for r in rows]}), encoding="utf-8")
     print(f"  Written {len(rows)} sites -> {SITES_FILE}")
 
 sites = json.loads(SITES_FILE.read_text(encoding="utf-8"))["sites"]
-df_sites = pd.DataFrame(sites, columns=["refid_mcmc", "nadi_name", "state", "tp", "dusp"])
+_SITE_COLS = ["refid_mcmc", "nadi_name", "state", "tp", "dusp",
+              "region_bm", "phase_name", "parliament_name", "dun_name", "mukim_name"]
+df_sites = pd.DataFrame(sites, columns=_SITE_COLS[:len(sites[0]) if sites else len(_SITE_COLS)])
 
 START_DATE = "2026-01-01"
 

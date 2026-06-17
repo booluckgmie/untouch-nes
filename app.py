@@ -60,7 +60,8 @@ def _fetch_and_cache(sub_id: int, start_date: str | None = None, end_date: str |
     _progress[sid] = {"status": "running", "pct": 3, "msg": f"Connecting to DB{date_label} …",
                       "mod": info.get("mod", ""), "chunks": 0, "done_chunks": 0}
     try:
-        _scols = ["refid_mcmc", "nadi_name", "state", "tp", "dusp"]
+        _scols = ["refid_mcmc", "nadi_name", "state", "tp", "dusp",
+                  "region_bm", "phase_name", "parliament_name", "dun_name", "mukim_name"]
         df_sites = pd.DataFrame(_STATIC_SITES, columns=_scols[:len(_STATIC_SITES[0]) if _STATIC_SITES else 3])
 
         _set_prog(sid, 7, "Getting event IDs …")

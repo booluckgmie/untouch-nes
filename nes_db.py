@@ -100,8 +100,9 @@ def _get_event_ids(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _fetch_events(conn, event_ids: list) -> pd.DataFrame:
+    """Event taxonomy metadata only — one row per event, no site expansion."""
     sql = f"""
-    SELECT DISTINCT ON (e.id)
+    SELECT DISTINCT
         e.id                                                AS event_id,
         COALESCE(ec.name,  '')                              AS event_category,
         COALESCE(esc.name, '')                              AS program_module,
@@ -111,36 +112,13 @@ def _fetch_events(conn, event_ids: list) -> pd.DataFrame:
         e.end_datetime::date                                AS event_lastdate,
         COALESCE(pm.name, '')                               AS program_method,
         COALESCE(e.description, '')                         AS event_description,
-        e.requester_id,
-        -- ── Event-site geographic / admin columns ──────────────────────────
-        ev_nsp.id                                           AS event_site_profile_id,
-        COALESCE(ev_nsp.sitename, '')                       AS event_site_name,
-        COALESCE(ev_nsp.refid_mcmc, '')                     AS event_site_refid_mcmc,
-        COALESCE(ev_org.name, '')                           AS event_site_tp,
-        COALESCE(ev_org.description, '')                    AS event_site_dusp,
-        COALESCE(ev_reg.bm, '')                             AS event_site_region,
-        COALESCE(ev_ph.name, '')                            AS event_site_phase,
-        COALESCE(ev_parl.name, '')                          AS event_site_parliament,
-        COALESCE(ev_dun.name, '')                           AS event_site_dun,
-        COALESCE(ev_muk.name, '')                           AS event_site_mukim,
-        COALESCE(ev_st.name, '')                            AS event_site_state
+        e.requester_id
     FROM public.nd_event e
-    LEFT JOIN public.nd_event_program     ep   ON ep.id  = e.program_id
-    LEFT JOIN public.nd_event_subcategory esc  ON esc.id = ep.subcategory_id
-    LEFT JOIN public.nd_event_category    ec   ON ec.id  = esc.category_id
-    LEFT JOIN public.nd_program_method    pm   ON pm.id  = e.program_method
-    -- ── Expand event site_id JSONB array → first valid site_profile ────────
-    LEFT JOIN LATERAL jsonb_array_elements_text(e.site_id) AS j(site_id_txt) ON true
-    LEFT JOIN public.nd_site_profile  ev_nsp  ON ev_nsp.id = j.site_id_txt::int
-    LEFT JOIN public.organizations    ev_org  ON ev_org.id  = ev_nsp.dusp_tp_id
-    LEFT JOIN public.nd_region        ev_reg  ON ev_reg.id  = ev_nsp.region_id
-    LEFT JOIN public.nd_phases        ev_ph   ON ev_ph.id   = ev_nsp.phase_id
-    LEFT JOIN public.nd_parliaments   ev_parl ON ev_parl.id = ev_nsp.parliament_rfid
-    LEFT JOIN public.nd_duns          ev_dun  ON ev_dun.id  = ev_nsp.dun_rfid
-    LEFT JOIN public.nd_mukims        ev_muk  ON ev_muk.id  = ev_nsp.mukim_id
-    LEFT JOIN public.nd_state         ev_st   ON ev_st.id   = ev_nsp.state_id
+    LEFT JOIN public.nd_event_program     ep  ON ep.id  = e.program_id
+    LEFT JOIN public.nd_event_subcategory esc ON esc.id = ep.subcategory_id
+    LEFT JOIN public.nd_event_category    ec  ON ec.id  = esc.category_id
+    LEFT JOIN public.nd_program_method    pm  ON pm.id  = e.program_method
     WHERE e.id = ANY(ARRAY[{_arr(event_ids)}]::uuid[])
-    ORDER BY e.id, j.site_id_txt::int ASC
     """
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(sql)
@@ -156,6 +134,7 @@ def _fetch_events(conn, event_ids: list) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _fetch_participants(conn, event_ids: list, cur_name: str) -> pd.DataFrame:
+    """Participants + home NADI site + site geographic / admin columns."""
     sql = f"""
     SELECT
         ep.event_id,
@@ -186,16 +165,30 @@ def _fetch_participants(conn, event_ids: list, cur_name: str) -> pd.DataFrame:
         COALESCE(nsp.sitename, 'Site-' || ns.id::text)     AS nadi_name,
         COALESCE(st.name, '')                               AS state,
         ns.standard_code,
+        -- ── Home NADI geographic / admin columns ──────────────────────────
+        COALESCE(tpd.name, '')                              AS tp,
+        COALESCE(tpd.description, '')                       AS dusp,
+        COALESCE(reg.bm, '')                                AS region_bm,
+        COALESCE(ph.name, '')                               AS phase_name,
+        COALESCE(parl.name, '')                             AS parliament_name,
+        COALESCE(dun.name, '')                              AS dun_name,
+        COALESCE(muk.name, '')                              AS mukim_name,
         -- ── Under-12 companion ────────────────────────────────────────────
         u12.id                                              AS under12_id,
         COALESCE(u12.fullname,  '')                         AS under12_name,
         COALESCE(u12.mobile_no, '')                         AS under12_phone,
         COALESCE(g2.bm, '')                                 AS under12_gender
     FROM public.nd_event_participant ep
-    LEFT JOIN public.nd_member_profile              mp  ON mp.id  = ep.member_id
-    LEFT JOIN public.nd_site                        ns  ON ns.id  = mp.ref_id
-    LEFT JOIN public.nd_site_profile                nsp ON nsp.id = ns.site_profile_id
-    LEFT JOIN public.nd_state                       st  ON st.id  = nsp.state_id
+    LEFT JOIN public.nd_member_profile              mp   ON mp.id  = ep.member_id
+    LEFT JOIN public.nd_site                        ns   ON ns.id  = mp.ref_id
+    LEFT JOIN public.nd_site_profile                nsp  ON nsp.id = ns.site_profile_id
+    LEFT JOIN public.nd_state                       st   ON st.id  = nsp.state_id
+    LEFT JOIN public.nd_tech_partner_dusp           tpd  ON tpd.id = nsp.dusp_tp_id
+    LEFT JOIN public.nd_region                      reg  ON reg.id = nsp.region_id
+    LEFT JOIN public.nd_phases                      ph   ON ph.id  = nsp.phase_id
+    LEFT JOIN public.nd_parliaments                 parl ON parl.id = nsp.parliament_rfid
+    LEFT JOIN public.nd_duns                        dun  ON dun.id = nsp.dun_rfid
+    LEFT JOIN public.nd_mukims                      muk  ON muk.id = nsp.mukim_id
     LEFT JOIN public.nd_genders g   ON g.id  = mp.gender
     LEFT JOIN public.nd_races   r   ON r.id  = mp.race_id
     LEFT JOIN public.nd_event_participant_under_twelve u12
@@ -264,12 +257,12 @@ def fetch(subcategory_id: int) -> pd.DataFrame:
             return df
 
         df.sort_values(
-            ["event_site_state", "event_site_name", "event_startdate", "event_id", "fullname"],
+            ["state", "nadi_name", "event_startdate", "event_id", "fullname"],
             inplace=True, ignore_index=True,
         )
         print(
             f"Rows        : {len(df):,}\n"
-            f"Event sites : {df['event_site_name'].nunique():,}\n"
+            f"Sites       : {df['nadi_name'].nunique():,}\n"
             f"Events      : {df['event_id'].nunique():,}\n"
             f"Participants: {df['participant_id'].nunique():,}"
         )
@@ -291,10 +284,23 @@ def fetch_all_sites() -> pd.DataFrame:
                     ns.refid_mcmc,
                     ns.standard_code,
                     COALESCE(nsp.sitename, 'Site-' || ns.id::text) AS nadi_name,
-                    COALESCE(st.name, '')                           AS state
+                    COALESCE(st.name, '')                           AS state,
+                    COALESCE(tpd.name, '')                          AS tp,
+                    COALESCE(tpd.description, '')                   AS dusp,
+                    COALESCE(reg.bm, '')                            AS region_bm,
+                    COALESCE(ph.name, '')                           AS phase_name,
+                    COALESCE(parl.name, '')                         AS parliament_name,
+                    COALESCE(dun.name, '')                          AS dun_name,
+                    COALESCE(muk.name, '')                          AS mukim_name
                 FROM public.nd_site            ns
-                LEFT JOIN public.nd_site_profile nsp ON nsp.id = ns.site_profile_id
-                LEFT JOIN public.nd_state         st  ON st.id  = nsp.state_id
+                LEFT JOIN public.nd_site_profile  nsp  ON nsp.id  = ns.site_profile_id
+                LEFT JOIN public.nd_state         st   ON st.id   = nsp.state_id
+                LEFT JOIN public.nd_tech_partner_dusp tpd ON tpd.id = nsp.dusp_tp_id
+                LEFT JOIN public.nd_region        reg  ON reg.id  = nsp.region_id
+                LEFT JOIN public.nd_phases        ph   ON ph.id   = nsp.phase_id
+                LEFT JOIN public.nd_parliaments   parl ON parl.id = nsp.parliament_rfid
+                LEFT JOIN public.nd_duns          dun  ON dun.id  = nsp.dun_rfid
+                LEFT JOIN public.nd_mukims        muk  ON muk.id  = nsp.mukim_id
                 ORDER BY st.name, nsp.sitename
             """)
             df = pd.DataFrame(cur.fetchall())
@@ -478,8 +484,11 @@ def build_nadi_index(
     """
     df_pax = df[df["participant_id"].notna()].copy()
 
+    _geo = ["nadi_name", "state", "tp", "dusp", "region_bm",
+            "phase_name", "parliament_name", "dun_name", "mukim_name"]
+    avail = ["refid_mcmc"] + [c for c in _geo if c in df_sites.columns]
     site_map = (
-        df_sites[["refid_mcmc", "nadi_name", "state"]]
+        df_sites[avail]
         .drop_duplicates("refid_mcmc")
         .set_index("refid_mcmc")
     )
@@ -499,12 +508,19 @@ def build_nadi_index(
                 }
 
         result.append({
-            "refid":    refid,
-            "name":     site_row["nadi_name"],
-            "state":    site_row["state"],
-            "events":   _safe_int(s["event_id"].nunique()) if not s.empty else 0,
-            "pax":      _participant_counts(s),
-            "programs": programs,
+            "refid":      refid,
+            "name":       str(site_row.get("nadi_name", "") or ""),
+            "state":      str(site_row.get("state", "") or ""),
+            "tp":         str(site_row.get("tp", "") or ""),
+            "dusp":       str(site_row.get("dusp", "") or ""),
+            "region":     str(site_row.get("region_bm", "") or ""),
+            "phase":      str(site_row.get("phase_name", "") or ""),
+            "parliament": str(site_row.get("parliament_name", "") or ""),
+            "dun":        str(site_row.get("dun_name", "") or ""),
+            "mukim":      str(site_row.get("mukim_name", "") or ""),
+            "events":     _safe_int(s["event_id"].nunique()) if not s.empty else 0,
+            "pax":        _participant_counts(s),
+            "programs":   programs,
         })
 
     return result
