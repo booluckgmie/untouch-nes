@@ -718,11 +718,11 @@ function renderMonthly(d){
 
   // Sub-pillar config: group programs into named pillars per subcategory
   const PILL_CFG={2:[
-    {name:'NURTURE',     progs:['CYBERSECURITY','EKELAS','TUISYEN RAKYAT','NADI-Nurture']},
-    {name:'SKILLFORGE',  progs:['ESPORT','MAHIR','NADI-SkillForge']},
-    {name:'TINYTECHIES', progs:['TINYTECHIES','NADI-TinyTechies']},
+    {name:'NURTURE',     info:'CYBERSECURITY · EKELAS · TUISYEN RAKYAT', progs:['CYBERSECURITY','EKELAS','TUISYEN RAKYAT','NADI-Nurture']},
+    {name:'SKILLFORGE',  info:'ESPORT · MAHIR',                          progs:['ESPORT','MAHIR','NADI-SkillForge']},
+    {name:'TINYTECHIES', info:'TINYTECHIES',                             progs:['TINYTECHIES','NADI-TinyTechies']},
   ]};
-  const _pRaw=(PILL_CFG[d.sub_id]||[]).map(pl=>({name:pl.name,pis:pl.progs.map(pn=>progs.indexOf(pn)).filter(i=>i>=0)})).filter(pl=>pl.pis.length>0);
+  const _pRaw=(PILL_CFG[d.sub_id]||[]).map(pl=>({name:pl.name,info:pl.info||'',pis:pl.progs.map(pn=>progs.indexOf(pn)).filter(i=>i>=0)})).filter(pl=>pl.pis.length>0);
   const pillars=_pRaw.length?_pRaw:null;
   const piToPl={};
   if(pillars) pillars.forEach((pl,pli)=>pl.pis.forEach(pi=>{piToPl[pi]=pli;}));
