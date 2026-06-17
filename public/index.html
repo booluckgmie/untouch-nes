@@ -217,9 +217,9 @@ table.t-mo tfoot td.f-st {position:sticky;left:240px;z-index:3;background:#fafaf
   .split-r.open{display:flex;max-height:50vh}
   .ov-grid{grid-template-columns:repeat(2,1fr)}
   .fc{margin-left:0}
-  table.t-mo thead th.f-ref,table.t-mo tbody td.f-ref,table.t-mo tfoot td.f-ref{min-width:65px;max-width:65px}
-  table.t-mo thead th.f-nm,table.t-mo tbody td.f-nm,table.t-mo tfoot td.f-nm{min-width:100px;max-width:100px;left:65px}
-  table.t-mo thead th.f-st,table.t-mo tbody td.f-st,table.t-mo tfoot td.f-st{min-width:60px;max-width:60px;left:165px}
+  table.t-mo thead th.f-ref,table.t-mo tbody td.f-ref,table.t-mo tfoot td.f-ref{min-width:75px;max-width:75px}
+  table.t-mo thead th.f-nm,table.t-mo tbody td.f-nm,table.t-mo tfoot td.f-nm{min-width:120px;max-width:120px;left:75px}
+  table.t-mo thead th.f-st,table.t-mo tbody td.f-st,table.t-mo tfoot td.f-st{min-width:65px;max-width:65px;left:195px}
   .toolbar select{font-size:11px;padding:4px 6px}
 }
 @media(max-width:480px){
@@ -602,7 +602,7 @@ function buildShell(id){
   const s=SUBS[id]||{};const totZ=((d.weekly||{}).zero||[]).length;
   if(!nd.progs)nd.progs=[];if(!nd.rows)nd.rows=[];
   _computeFilteredMI();rebuildTRowsAll();
-  const _nxr=(f=>{const m=/(\d+)\s+(\w+)\s+(\d+),\s+(\d+):(\d+)/.exec(f||'');if(!m)return'—';const D=new Date(+m[3],{Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11}[m[2]]||0,+m[1],+m[4],+m[5]+5);return m[1]+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][D.getMonth()]+' '+D.getFullYear()+', '+String(D.getHours()).padStart(2,'0')+':'+String(D.getMinutes()).padStart(2,'0');})(d.fetched);
+  const _nxr=(f=>{const m=/(\d+)\s+(\w+)\s+(\d+),\s+(\d+):(\d+)/.exec(f||'');if(!m)return'—';const D=new Date(+m[3],{Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11}[m[2]]||0,+m[1],+m[4]+1,+m[5]);return D.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][D.getMonth()]+' '+D.getFullYear()+', '+String(D.getHours()).padStart(2,'0')+':'+String(D.getMinutes()).padStart(2,'0');})(d.fetched);
   document.getElementById('main').innerHTML=`
     <div class="top-bar">
       <div class="bc">NES &rsaquo; <a onclick="gOv(document.getElementById('navOv'))">Overview</a> &rsaquo; ${nd.cat} &rsaquo; <span>${ce(lbl)}</span></div>
@@ -717,12 +717,12 @@ function renderMonthly(d){
 
   // Sub-pillar config: group programs into named pillars per subcategory
   const PILL_CFG={2:[
-    {name:'NURTURE',    progs:['CYBERSECURITY','EKELAS','NADI TUISYEN RAKYAT']},
-    {name:'SKILLFORGE', progs:['ESPORT','MAHIR']},
-    {name:'TINYTECHIES',progs:['NADI-TinyTechies']},
+    {name:'NURTURE',    info:'CYBERSECURITY · EKELAS · TUISYEN RAKYAT', progs:['NADI-Nurture']},
+    {name:'SKILLFORGE', info:'ESPORT · MAHIR',                          progs:['NADI-SkillForge']},
+    {name:'TINYTECHIES',info:'NADI-TinyTechies',                        progs:['NADI-TinyTechies']},
   ]};
   const pillars=(PILL_CFG[d.sub_id]||[]).length
-    ?(PILL_CFG[d.sub_id]).map(pl=>({name:pl.name,pis:pl.progs.map(pn=>progs.indexOf(pn)).filter(i=>i>=0)}))
+    ?(PILL_CFG[d.sub_id]).map(pl=>({name:pl.name,info:pl.info||'',pis:pl.progs.map(pn=>progs.indexOf(pn)).filter(i=>i>=0)}))
     :null;
   const piToPl={};
   if(pillars) pillars.forEach((pl,pli)=>pl.pis.forEach(pi=>{piToPl[pi]=pli;}));
@@ -739,7 +739,7 @@ function renderMonthly(d){
   if(pillars){
     const hPillar=pillars.map((pl,pli)=>{
       const pc=PROG_COLORS[pli%PROG_COLORS.length];
-      return `<th colspan="${pl.pis.length*2}" data-pl="${pli}" style="text-align:center;padding:4px 6px;font-size:9px;font-weight:700;color:${pc};border-left:1px solid var(--line2)">${ce(pl.name)}</th>`;
+      return `<th colspan="${pl.pis.length*2}" data-pl="${pli}" style="text-align:center;padding:4px 6px;font-size:9px;font-weight:700;color:${pc};border-left:1px solid var(--line2)">${ce(pl.name)}${pl.info?`<div style="font-size:7px;font-weight:400;color:var(--t3);margin-top:1px;white-space:normal">${ce(pl.info)}</div>`:''}</th>`;
     }).join('');
     const hProg=displayPis.map(pi=>{
       const pli=piToPl[pi];const pc=PROG_COLORS[pli%PROG_COLORS.length];const pn=progs[pi]||'';
