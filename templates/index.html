@@ -498,12 +498,70 @@ async function gSub(id,btn){
   loadSubData(id);
 }
 
+function normalizeSubData(raw,id){
+  if(!Array.isArray(raw.nadi))return raw; // already dict format
+  const s=SUBS[id]||{};
+  const refToIdx={};NI.forEach((n,i)=>{refToIdx[n[0]]=i;});
+
+  /* ── NADI INDEX ── */
+  const progSet=new Set();
+  raw.nadi.forEach(n=>Object.keys(n.programs||{}).forEach(p=>progSet.add(p)));
+  const progs=[...progSet].sort();
+  let totE=0,totP=0,active=0;
+  const nadiRows=[];
+  raw.nadi.forEach(n=>{
+    const idx=refToIdx[n.refid];if(idx===undefined)return;
+    const ne=n.events||0,np=(n.pax||{}).total||0;
+    totE+=ne;totP+=np;if(ne>0)active++;
+    const pr={};
+    progs.forEach((pn,k)=>{const pg=(n.programs||{})[pn];if(pg&&(pg.events||pg.pax))pr[String(k)]=[pg.events||0,pg.pax||0];});
+    nadiRows.push([idx,ne,np,pr]);
+  });
+  const nadiDict={cat:s.cat||'',mod:s.mod||'',e:totE,p:totP,a:active,u:NI.length-active,progs,rows:nadiRows};
+
+  /* ── MONTHLY ── */
+  const months=raw.monthly.map(m=>m.label);
+  const nm=months.length;
+  const mMap={};
+  raw.monthly.forEach((m,mi)=>{
+    Object.entries(m.nadi||{}).forEach(([ref,data])=>{
+      const idx=refToIdx[ref];if(idx===undefined)return;
+      if(!mMap[idx])mMap[idx]={tot:new Array(nm).fill(0),pax:new Array(nm).fill(0),pr:{}};
+      mMap[idx].tot[mi]=data.events||0;mMap[idx].pax[mi]=data.pax||0;
+    });
+  });
+  const monthlyRows=Object.entries(mMap).map(([idx,v])=>[+idx,v.tot,v.pax,v.pr]);
+  const monthlyDict={months,progs,rows:monthlyRows};
+
+  /* ── WEEKLY ── */
+  function isoWeekStart(ws){
+    const m=/^(\d{4})-W(\d{2})$/.exec(ws);if(!m)return null;
+    const yr=+m[1],wk=+m[2];const jan4=new Date(yr,0,4);
+    const dow=jan4.getDay()||7;
+    return new Date(jan4.getTime()-(dow-1)*86400000+(wk-1)*7*86400000);
+  }
+  const wkWeeks=raw.weekly.map(w=>{const ws=isoWeekStart(w.period);return{k:w.period,l:w.label,ws:ws?ws.toISOString().slice(0,10):'',ev:w.events||0,z:0,p:0,c:w.events||0};});
+  const nw={};const activeSet=new Set();
+  raw.weekly.forEach(w=>{
+    const wk=w.period;nw[wk]={};
+    Object.entries(w.nadi||{}).forEach(([ref,data])=>{
+      const evCnt=data.events||0;if(!evCnt)return;
+      const paxTot=data.pax||0,base=Math.floor(paxTot/evCnt),rem=paxTot-base*evCnt;
+      const evs=[];for(let i=0;i<evCnt;i++){const a=base+(i<rem?1:0);evs.push({pn:'',pr:'',tp:a,at:a,st:'c',sso:''});}
+      nw[wk][ref]=evs;activeSet.add(ref);
+    });
+  });
+  const weeklyDict={cat:s.cat||'',mod:s.mod||'',weeks:wkWeeks,nw,zero:[],active_refs:[...activeSet]};
+
+  return{...raw,nadi:nadiDict,monthly:monthlyDict,weekly:weeklyDict};
+}
+
 async function loadSubData(id){
   document.getElementById('main').innerHTML=`<div class="state-box"><div class="icon">⏳</div><p>Loading data…</p></div>`;
   try{
     const r=await fetch('/api/data/'+id).then(x=>x.json());
     if(!r.ok){document.getElementById('main').innerHTML=`<div class="state-box"><div class="icon">⚠️</div><p>${r.error||'Data not available'}</p><p style="font-size:11px;color:var(--t3)">Try fetching again from the sidebar.</p></div>`;return;}
-    window._D=r.data;
+    window._D=normalizeSubData(r.data,id);
     buildShell(id);showTab('nadi');
   }catch(e){
     console.error('loadSubData error:',e);
