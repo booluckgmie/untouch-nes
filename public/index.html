@@ -542,6 +542,20 @@ function normalizeSubData(raw,id){
       mMap[idx].tot[mi]=data.events||0;mMap[idx].pax[mi]=data.pax||0;
     });
   });
+  // Distribute per-program totals proportionally across months
+  raw.nadi.forEach(n=>{
+    const idx=refToIdx[n.refid];if(idx===undefined||!mMap[idx])return;
+    const v=mMap[idx],monthSum=v.tot.reduce((s,x)=>s+x,0);if(!monthSum)return;
+    progs.forEach((pn,k)=>{
+      const pg=(n.programs||{})[pn];if(!pg||!(pg.events||pg.pax))return;
+      let remEv=pg.events||0,remPx=pg.pax||0;const ev=[],px=[];
+      for(let i=0;i<nm;i++){
+        if(i===nm-1){ev.push(Math.max(0,remEv));px.push(Math.max(0,remPx));}
+        else{const frac=v.tot[i]/monthSum;const te=Math.round((pg.events||0)*frac),tp=Math.round((pg.pax||0)*frac);ev.push(te);px.push(tp);remEv-=te;remPx-=tp;}
+      }
+      v.pr[String(k)]={ev,px};
+    });
+  });
   const monthlyRows=Object.entries(mMap).map(([idx,v])=>[+idx,v.tot,v.pax,v.pr]);
   const monthlyDict={months,progs,rows:monthlyRows};
 
@@ -620,12 +634,17 @@ function showTab(t){
 function renderNadi(d){
   const nd=d.nadi||{},col=COL[nd.mod]||'#555';
   const _progs=nd.progs||[];
+  const _fE=tRowsAll.reduce((s,r)=>s+r.te,0);
+  const _fP=tRowsAll.reduce((s,r)=>s+r.tp,0);
+  const _fA=tRowsAll.filter(r=>r.te>0).length;
+  const _fU=tRowsAll.filter(r=>r.te===0).length;
+  const _isFiltered=!!_filteredMI;
   document.getElementById('tB').innerHTML=`
     <div class="kpi-row">
-      <div class="kpi"><div class="kpi-l">Events</div><div class="kpi-v" style="color:${col}">${fN(nd.e)}</div><div class="kpi-s">${_progs.length} programs</div></div>
-      <div class="kpi"><div class="kpi-l">Pax</div><div class="kpi-v">${fN(nd.p)}</div><div class="kpi-s">registrations</div></div>
-      <div class="kpi"><div class="kpi-l">Active NADI</div><div class="kpi-v" style="color:var(--green)">${nd.a||0}</div><div class="kpi-s">${Math.round((nd.a||0)/1099*100)}% of 1,099</div></div>
-      <div class="kpi"><div class="kpi-l">Untouched</div><div class="kpi-v" style="color:var(--red)">${nd.u||0}</div><div class="kpi-s">&lt;3 events/quarter</div></div>
+      <div class="kpi"><div class="kpi-l">Events${_isFiltered?' <span style="font-size:8px;color:var(--purple)">(filtered)</span>':''}</div><div class="kpi-v" style="color:${col}">${fN(_fE)}</div><div class="kpi-s">${_progs.length} programs</div></div>
+      <div class="kpi"><div class="kpi-l">Pax</div><div class="kpi-v">${fN(_fP)}</div><div class="kpi-s">registrations</div></div>
+      <div class="kpi"><div class="kpi-l">Active NADI</div><div class="kpi-v" style="color:var(--green)">${_fA}</div><div class="kpi-s">${Math.round(_fA/1099*100)}% of 1,099</div></div>
+      <div class="kpi"><div class="kpi-l">Untouched</div><div class="kpi-v" style="color:var(--red)">${_fU}</div><div class="kpi-s">&lt;3 events/quarter</div></div>
     </div>
     <div class="content">
       <div class="toolbar">
@@ -764,7 +783,7 @@ function renderMonthly(d){
       <div class="kpi"><div class="kpi-l">Period</div><div class="kpi-v" style="font-size:14px;font-weight:600">${dispMonths[0]||'—'}</div><div class="kpi-s">to ${dispMonths[dispMonths.length-1]||'—'}</div></div>
       <div class="kpi"><div class="kpi-l">Months</div><div class="kpi-v" style="color:${col}">${dispMonths.length}</div><div class="kpi-s">reporting periods</div></div>
       <div class="kpi"><div class="kpi-l">Programs</div><div class="kpi-v" style="color:${col}">${np}</div><div class="kpi-s">in this subcategory</div></div>
-      <div class="kpi"><div class="kpi-l">Active NADI</div><div class="kpi-v" style="color:var(--green)">${nd.a}</div><div class="kpi-s">of 1,099</div></div>
+      <div class="kpi"><div class="kpi-l">Active NADI</div><div class="kpi-v" style="color:var(--green)">${tRowsAll.filter(r=>r.te>0).length}</div><div class="kpi-s">of 1,099</div></div>
     </div>
     <div style="padding:0 24px 8px;flex-shrink:0">
       <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:700">Events by month (all programs)</div>
@@ -1290,7 +1309,7 @@ function rWkByWeek(wk,nd){
         <div class="toolbar" style="flex-shrink:0">
           <input id="wkq" placeholder="Search NADI…" oninput="fWkN()">
           <select id="wkst" onchange="fWkN()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
-          <select id="wkpr" onchange="fWkN()"><option value="">All programs</option>${[...new Set(Object.values(wk.nw).flatMap(refs=>Object.values(refs).flat().map(e=>e.pr)).filter(Boolean))].sort().map(p=>`<option value="${ce(p)}">${ce(p)}</option>`).join('')}</select>
+          <select id="wkpr" onchange="fWkN()"><option value="">All programs</option>${(nd.progs||[...new Set(Object.values(wk.nw).flatMap(refs=>Object.values(refs).flat().map(e=>e.pr)).filter(Boolean))].sort()).map(p=>`<option value="${ce(p)}">${ce(p)}</option>`).join('')}</select>
           <select id="wksf" onchange="fWkN()"><option value="">All</option><option value="z">Has zero</option><option value="c">All complete</option></select>
           <select id="wktp" onchange="fWkN()"><option value="">All TP</option>${(window._tpOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
           <select id="wkdusp" onchange="fWkN()"><option value="">All DUSP</option>${(window._duspOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
@@ -1353,18 +1372,22 @@ function oWkNP(ref){
   const ni=NI.find(n=>n[0]===ref)||[ref,ref,'—'];
   document.querySelectorAll('#wkNTb tr').forEach(r=>r.classList.remove('sel'));
   const el=document.getElementById('wkr_'+ref.replace(/[^a-z0-9]/gi,'_'));if(el)el.classList.add('sel');
-  const evs=selWeek?(wk.nw[selWeek]||{})[ref]||[]:Object.values(wk.nw).flatMap(refs=>refs[ref]||[]);
-  const zEvs=evs.filter(e=>e.st==='z'),pEvs=evs.filter(e=>e.st==='p'),cEvs=evs.filter(e=>e.st==='c');
   document.getElementById('wkPT').textContent=ni[1];
   document.getElementById('wkPRf').textContent=`${ref} · ${ni[2]}${selWeek?' · '+selWeek:''}`;
   document.getElementById('wkPR').className='split-r open';
-  const eB=(list,label,cls,icon)=>list.length?`<div style="margin-bottom:12px"><div class="ev-sec-hdr">${icon} ${label} (${list.length})</div>
-    ${list.map(e=>`<div class="ev-row"><div class="ev-prog" style="color:${col}">${ce(e.pr)}</div>
-    <div class="ev-name">${ce(e.pn)}</div>
-    <div class="ev-meta"><span class="${cls}">att: ${e.at}/${e.tp}</span><span class="sso-tag">${e.sso}</span></div></div>`).join('')}</div>`:'';
-  document.getElementById('wkPB').innerHTML=
-    (zEvs.length?`<div class="ut-banner"><div class="ut-banner-t">⚠ ${zEvs.length} event${zEvs.length>1?'s':''} with 0 attendance</div><div class="ut-banner-s">SSO must record attendance within 7 days.</div></div>`:'')+
-    eB(zEvs,'Zero attended','att-z','⚠')+eB(pEvs,'Partial','att-p','◑')+eB(cEvs,'Complete','att-ok','✓');
+  const activeWks=selWeek?[selWeek]:wk.weeks.filter(w=>(wk.nw[w.k]||{})[ref]).map(w=>w.k);
+  const rows=activeWks.map(wkk=>{const evs=(wk.nw[wkk]||{})[ref]||[];const wInfo=wk.weeks.find(w=>w.k===wkk)||{};const pax=evs.reduce((s,e)=>s+(e.at||0),0);
+    // If events have real names, use detail view
+    const hasDetail=evs.some(e=>e.pn);
+    if(hasDetail){const z=evs.filter(e=>e.st==='z'),p=evs.filter(e=>e.st==='p'),c=evs.filter(e=>e.st==='c');
+      return`<div style="margin-bottom:12px"><div class="ev-sec-hdr">${wkk}${wInfo.l?' · '+wInfo.l:''}</div>
+      ${evs.map(e=>`<div class="ev-row"><div class="ev-prog" style="color:${col}">${ce(e.pr)}</div><div class="ev-name">${ce(e.pn)}</div>
+        <div class="ev-meta"><span class="${e.st==='z'?'att-z':e.st==='c'?'att-ok':'att-p'}">${e.st==='z'?'⚠ 0 att':'att: '+e.at+'/'+e.tp}</span><span class="sso-tag">${e.sso}</span></div></div>`).join('')}</div>`;}
+    return`<div style="margin-bottom:8px"><div class="ev-sec-hdr" style="color:${col}">${wkk}${wInfo.l?' · '+wInfo.l:''}</div>
+      <div class="ev-row"><div class="ev-prog" style="color:${col};font-size:11px;font-weight:600">${evs.length} events</div>
+      <div class="ev-meta"><span class="att-ok">${fN(pax)} pax</span></div></div></div>`;
+  }).join('');
+  document.getElementById('wkPB').innerHTML=rows||`<div style="font-size:11px;color:var(--t3);padding:8px">No events in this period.</div>`;
 }
 function cWkP(){document.getElementById('wkPR').className='split-r';document.querySelectorAll('#wkNTb tr').forEach(r=>r.classList.remove('sel'));}
 
@@ -1384,7 +1407,7 @@ function rWkByNadi(wk,nd){
         <div class="toolbar" style="flex-shrink:0">
           <input id="bnq" placeholder="Search NADI…" oninput="fBnN()">
           <select id="bnst" onchange="fBnN()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
-          <select id="bnpr" onchange="fBnN()"><option value="">All programs</option>${[...new Set(Object.values(wk.nw).flatMap(refs=>Object.values(refs).flat().map(e=>e.pr)).filter(Boolean))].sort().map(p=>`<option value="${ce(p)}">${ce(p)}</option>`).join('')}</select>
+          <select id="bnpr" onchange="fBnN()"><option value="">All programs</option>${(nd.progs||[...new Set(Object.values(wk.nw).flatMap(refs=>Object.values(refs).flat().map(e=>e.pr)).filter(Boolean))].sort()).map(p=>`<option value="${ce(p)}">${ce(p)}</option>`).join('')}</select>
           <select id="bnsf" onchange="fBnN()"><option value="">All status</option><option value="z">Has zero</option><option value="ok">All complete</option><option value="ut">Untouched</option></select>
           <select id="bntp" onchange="fBnN()"><option value="">All TP</option>${(window._tpOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
           <select id="bndusp" onchange="fBnN()"><option value="">All DUSP</option>${(window._duspOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
@@ -1478,13 +1501,21 @@ function oBnP(ref){
   let html='';
   wksSorted.forEach(w=>{
     const evs=byWeek[w.k];const z=evs.filter(e=>e.st==='z');
-    html+=`<div style="margin-bottom:12px"><div class="ev-sec-hdr" style="${z.length?'color:var(--red)':''}">${w.k} · ${w.l} ${z.length?`<span style="color:var(--red)">⚠ ${z.length} zero</span>`:''}</div>
-      ${evs.map(e=>`<div class="ev-row" style="${e.st==='z'?'background:#fff8f8;border-radius:4px;padding:5px 8px;margin-bottom:2px':''}">
-        <div class="ev-prog" style="color:${col}">${ce(e.pr)}</div><div class="ev-name">${ce(e.pn)}</div>
-        <div class="ev-meta"><span class="${e.st==='z'?'att-z':e.st==='c'?'att-ok':'att-p'}">${e.st==='z'?'⚠ 0':'att:'} ${e.at}/${e.tp}</span>
-        <span class="sso-tag">${e.sso}</span></div></div>`).join('')}</div>`;
+    const hasDetail=evs.some(e=>e.pn);
+    if(hasDetail){
+      html+=`<div style="margin-bottom:12px"><div class="ev-sec-hdr" style="${z.length?'color:var(--red)':''}">${w.k} · ${w.l} ${z.length?`<span style="color:var(--red)">⚠ ${z.length} zero</span>`:''}</div>
+        ${evs.map(e=>`<div class="ev-row" style="${e.st==='z'?'background:#fff8f8;border-radius:4px;padding:5px 8px;margin-bottom:2px':''}">
+          <div class="ev-prog" style="color:${col}">${ce(e.pr)}</div><div class="ev-name">${ce(e.pn)}</div>
+          <div class="ev-meta"><span class="${e.st==='z'?'att-z':e.st==='c'?'att-ok':'att-p'}">${e.st==='z'?'⚠ 0':'att:'} ${e.at}/${e.tp}</span>
+          <span class="sso-tag">${e.sso}</span></div></div>`).join('')}</div>`;
+    } else {
+      const pax=evs.reduce((s,e)=>s+(e.at||0),0);
+      html+=`<div style="margin-bottom:8px"><div class="ev-sec-hdr" style="color:${col}">${w.k} · ${w.l}</div>
+        <div class="ev-row"><div class="ev-prog" style="color:${col};font-size:11px;font-weight:600">${evs.length} events</div>
+        <div class="ev-meta"><span class="att-ok">${fN(pax)} pax</span></div></div></div>`;
+    }
   });
-  document.getElementById('bnPB').innerHTML=html;
+  document.getElementById('bnPB').innerHTML=html||`<div style="font-size:11px;color:var(--t3);padding:8px">No events found.</div>`;
 }
 function cBnP(){document.getElementById('bnPR').className='split-r';document.querySelectorAll('#bnTb tr').forEach(r=>r.classList.remove('sel'));}
 
