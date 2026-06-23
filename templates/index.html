@@ -550,14 +550,16 @@ async function gSub(id,btn){
   loadSubData(id);
 }
 
+// Canonical LL sub-program classifier — priority matches pivot_shared._ll_classifier (last-wins = skill highest)
+function _llPillar(pn){const p=(pn||'').toLowerCase();if(p.includes('skillforge')||p.includes('skill'))return'ESPORT';if(p.includes('cyber')||p.includes('siber')||p.includes('security'))return'CYBERSECURITY';if(p.includes('ekelas')||p.includes('e-kelas'))return'EKELAS';if(p.includes('tuisyen')||p.includes('tuition')||p.includes('guidance'))return'TUISYEN RAKYAT';if(p.includes('mahir'))return'MAHIR';if(p.includes('esport'))return'ESPORT';if(p.includes('tiny')||p.includes('techie'))return'TINYTECHIES';return'CYBERSECURITY';}
+
 function normalizeSubData(raw,id){
   if(!Array.isArray(raw.nadi))return raw; // already dict format
   const s=SUBS[id]||{};
   const refToIdx={};NI.forEach((n,i)=>{refToIdx[n[0]]=i;});
 
-  // For Lifelong Learning, collapse raw program_name values into 3 pillar groups
+  // For Lifelong Learning, collapse raw program_name values using global _llPillar
   if(id===2){
-    const _llPillar=pn=>{const p=(pn||'').toLowerCase();if(p.includes('tiny')||p.includes('techie'))return'TINYTECHIES';if(p.includes('esport'))return'ESPORT';if(p.includes('mahir'))return'MAHIR';if(p.includes('tuisyen')||p.includes('tuition')||p.includes('guidance'))return'TUISYEN RAKYAT';if(p.includes('ekelas')||p.includes('e-kelas'))return'EKELAS';if(p.includes('cyber')||p.includes('siber')||p.includes('security'))return'CYBERSECURITY';if(p.includes('skillforge')||p.includes('skill'))return'ESPORT';return'CYBERSECURITY';};
     raw.nadi.forEach(n=>{
       if(!n.programs||!Object.keys(n.programs).length)return;
       const rem={};

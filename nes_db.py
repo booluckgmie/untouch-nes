@@ -441,15 +441,19 @@ def apply_sso_remap(df: pd.DataFrame, sub_id: int) -> pd.DataFrame:
 
 
 def _ll_canonical(pn: str) -> str:
-    """Map raw Lifelong Learning program_name to one of 6 canonical sub-program keys."""
+    """
+    Map raw Lifelong Learning program_name to one of 6 canonical sub-program keys.
+    Priority order matches pivot_shared._ll_classifier (last-applied wins → reversed here):
+      skill/skillforge > cyber/siber/security > ekelas > tuisyen > mahir > esport > tiny/techie > default CYBERSECURITY
+    """
     p = (pn or "").lower()
-    if "tiny" in p or "techie" in p:                      return "TINYTECHIES"
-    if "esport" in p:                                      return "ESPORT"
-    if "mahir" in p:                                       return "MAHIR"
-    if "tuisyen" in p or "tuition" in p or "guidance" in p: return "TUISYEN RAKYAT"
-    if "ekelas" in p or "e-kelas" in p:                   return "EKELAS"
-    if "cyber" in p or "siber" in p or "security" in p:   return "CYBERSECURITY"
-    if "skillforge" in p or "skill" in p:                 return "ESPORT"
+    if "skillforge" in p or "skill" in p:                     return "ESPORT"
+    if "cyber" in p or "siber" in p or "security" in p:       return "CYBERSECURITY"
+    if "ekelas" in p or "e-kelas" in p:                       return "EKELAS"
+    if "tuisyen" in p or "tuition" in p or "guidance" in p:   return "TUISYEN RAKYAT"
+    if "mahir" in p:                                           return "MAHIR"
+    if "esport" in p:                                          return "ESPORT"
+    if "tiny" in p or "techie" in p:                          return "TINYTECHIES"
     return "CYBERSECURITY"
 
 
