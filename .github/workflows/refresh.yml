@@ -48,6 +48,7 @@ jobs:
           
           if [ "$CHANGES_EXIST" = "true" ]; then
             git commit -m "chore: refresh data $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git pull --rebase origin main
             git push
           else
             echo "No data changes — skipping commit"
