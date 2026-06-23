@@ -566,6 +566,17 @@ function normalizeSubData(raw,id){
   const s=SUBS[id]||{};
   const refToIdx={};NI.forEach((n,i)=>{refToIdx[n[0]]=i;});
 
+  // For Lifelong Learning, collapse raw program_name values into 3 pillar groups
+  if(id===2){
+    const _llPillar=pn=>{const p=(pn||'').toLowerCase();if(p.includes('tiny')||p.includes('techie'))return'NADI-TinyTechies';if(p.includes('skill')||p.includes('esport')||p.includes('mahir'))return'NADI-SkillForge';return'NADI-Nurture';};
+    raw.nadi.forEach(n=>{
+      if(!n.programs||!Object.keys(n.programs).length)return;
+      const rem={};
+      Object.entries(n.programs).forEach(([pn,d])=>{const t=_llPillar(pn);if(!rem[t])rem[t]={events:0,pax:0};rem[t].events+=(d.events||0);rem[t].pax+=(d.pax||0);});
+      n.programs=rem;
+    });
+  }
+
   /* ── NADI INDEX ── */
   const progSet=new Set();
   raw.nadi.forEach(n=>Object.keys(n.programs||{}).forEach(p=>progSet.add(p)));
@@ -1815,6 +1826,22 @@ function openQPanel(ni_idx){
       <div style="flex:1;display:flex;align-items:flex-end;width:100%"><div style="width:100%;height:${h}px;background:${v?col:'#e8e6e3'};border-radius:2px 2px 0 0"></div></div>
       <span style="font-size:7px;color:var(--t3);white-space:nowrap">${mH(m)}</span></div>`;
   }).join('');
+  // Per-program breakdown for the quarter (from monthly rows)
+  const _mRows=(window._D.monthly||{}).rows||[];
+  const _mRow=_mRows.find(r=>r[0]===ni_idx);
+  const _progs=((window._D.nadi||{}).progs)||[];
+  let progHtml='';
+  if(_mRow&&_progs.length){
+    const[,,,prData]=_mRow;
+    if(prData&&typeof prData==='object'){
+      const qi2=curQ.indices||[];
+      const pd=_progs.map((pn,k)=>{const p=prData[String(k)]||{};const ev=qi2.reduce((s,j)=>s+((p.ev||[])[j]||0),0);const px=qi2.reduce((s,j)=>s+((p.px||[])[j]||0),0);return{pn,ev,px};}).filter(p=>p.ev>0||p.px>0);
+      if(pd.length){progHtml=`<div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:10px">
+        <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Programs — ${curQ.label}</div>
+        ${pd.map(p=>`<div class="prow"><div class="pdot2" style="background:${col}"></div><span class="pname">${ce(p.pn)}</span><span class="pev">${fN(p.ev)}</span><span class="ppax">${fN(p.px)} pax</span></div>`).join('')}
+      </div>`;}
+    }
+  }
   document.getElementById('ptitle').textContent=nm2||ref;
   document.getElementById('pref').textContent=`${state||''} · ${ref}`;
   document.getElementById('ptabs').innerHTML='';
@@ -1829,7 +1856,8 @@ function openQPanel(ni_idx){
       <div><div style="font-size:10px;color:var(--t3)">Total events</div><div style="font-size:20px;font-weight:700;color:${isUt?'var(--red)':col}">${totEv}</div><div style="font-size:9px;color:var(--t3)">min 3 required</div></div>
       <div><div style="font-size:10px;color:var(--t3)">Total pax</div><div style="font-size:20px;font-weight:700">${fN(totPx)}</div></div>
       <div><div style="font-size:10px;color:var(--t3)">Status</div><div style="font-size:13px;font-weight:700;color:${isUt?'var(--red)':'var(--green)'}${isUt?';margin-top:4px':';margin-top:4px'}">${isUt?'⚠ Untouched':'✓ Active'}</div></div>
-    </div>`;
+    </div>
+    ${progHtml}`;
   document.getElementById('panel').classList.add('open');
   document.getElementById('ov2').classList.add('open');
 }
