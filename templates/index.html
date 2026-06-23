@@ -573,7 +573,8 @@ function normalizeSubData(raw,id){
     progs.forEach((pn,k)=>{const pg=(n.programs||{})[pn];if(pg&&(pg.events||pg.pax))pr[String(k)]=[pg.events||0,pg.pax||0];});
     nadiRows.push([idx,ne,np,pr]);
   });
-  const nadiDict={cat:s.cat||'',mod:s.mod||'',e:totE,p:totP,a:active,u:NI.length-active,progs,rows:nadiRows};
+  const _evByNI={};raw.nadi.forEach(n=>{const idx=refToIdx[n.refid];if(idx!==undefined&&n.ev&&n.ev.length)_evByNI[idx]=n.ev;});
+  const nadiDict={cat:s.cat||'',mod:s.mod||'',e:totE,p:totP,a:active,u:NI.length-active,progs,rows:nadiRows,ev:_evByNI};
 
   /* ── MONTHLY ── */
   const months=raw.monthly.map(m=>m.label);
@@ -1798,22 +1799,15 @@ function openQPanel(ni_idx){
       <div style="flex:1;display:flex;align-items:flex-end;width:100%"><div style="width:100%;height:${h}px;background:${v?col:'#e8e6e3'};border-radius:2px 2px 0 0"></div></div>
       <span style="font-size:7px;color:var(--t3);white-space:nowrap">${mH(m)}</span></div>`;
   }).join('');
-  // Per-program breakdown for the quarter (from monthly rows)
-  const _mRows=(window._D.monthly||{}).rows||[];
-  const _mRow=_mRows.find(r=>r[0]===ni_idx);
-  const _progs=((window._D.nadi||{}).progs)||[];
+  // Event names for this NADI filtered to the selected quarter
+  const _allEvs=((window._D.nadi||{}).ev||{})[ni_idx]||[];
+  const _qMonthSet=new Set(qi.map(j=>months[j]));
+  const _qEvs=_allEvs.filter(e=>_qMonthSet.has(e.m));
   let progHtml='';
-  if(_mRow&&_progs.length){
-    const[,,,prData]=_mRow;
-    if(prData&&typeof prData==='object'){
-      const qi2=curQ.indices||[];
-      const pd=_progs.map((pn,k)=>{const p=prData[String(k)]||{};const ev=qi2.reduce((s,j)=>s+((p.ev||[])[j]||0),0);const px=qi2.reduce((s,j)=>s+((p.px||[])[j]||0),0);return{pn,ev,px};}).filter(p=>p.ev>0||p.px>0);
-      if(pd.length){progHtml=`<div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:10px">
-        <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Programs — ${curQ.label}</div>
-        ${pd.map(p=>`<div class="prow"><div class="pdot2" style="background:${col}"></div><span class="pname">${ce(p.pn)}</span><span class="pev">${fN(p.ev)}</span><span class="ppax">${fN(p.px)} pax</span></div>`).join('')}
-      </div>`;}
-    }
-  }
+  if(_qEvs.length){progHtml=`<div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:10px">
+    <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Events — ${curQ.label}</div>
+    ${_qEvs.map(e=>`<div class="prow"><div class="pdot2" style="background:${col}"></div><span class="pname">${ce(e.n)}</span><span class="pev" style="font-size:10px;color:var(--t2)">${fN(e.p)} pax</span><span class="ppax">${e.m}</span></div>`).join('')}
+  </div>`;}else if(_allEvs.length===0&&totEv>0){progHtml=`<div style="margin-top:10px;font-size:10px;color:var(--t3);font-style:italic">Event details available after next data refresh.</div>`;}
   document.getElementById('ptitle').textContent=nm2||ref;
   document.getElementById('pref').textContent=`${state||''} · ${ref}`;
   document.getElementById('ptabs').innerHTML='';
