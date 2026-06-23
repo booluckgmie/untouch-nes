@@ -529,19 +529,24 @@ def build_nadi_index(
                         "pax":    _safe_int(grp["participant_id"].nunique()),
                     }
 
-        # Compact per-event list: [{n, m, p}] — name, month label, pax count
+        # Compact per-event list: [{n, m, p, a, sp}]
         ev_list: list = []
         if not s.empty:
             for eid, eg in s.groupby("event_id"):
                 name = str(eg["program_name"].iloc[0] or eg["program"].iloc[0] or "")[:60]
+                subp = (_ll_canonical(name) if sub_id == 2
+                        else str(eg["program"].iloc[0] or "")[:40])
                 try:
                     mlbl = pd.Timestamp(eg["event_startdate"].iloc[0]).strftime("%b %Y")
                 except Exception:
                     mlbl = ""
+                att = eg["attendance"].astype(str).str.lower().isin(["true", "1", "t", "yes"])
                 ev_list.append({
-                    "n": name,
-                    "m": mlbl,
-                    "p": _safe_int(eg["participant_id"].nunique()),
+                    "n":  name,
+                    "m":  mlbl,
+                    "p":  _safe_int(eg["participant_id"].nunique()),
+                    "a":  _safe_int(att.sum()),
+                    "sp": subp,
                 })
 
         result.append({
