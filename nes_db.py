@@ -539,13 +539,18 @@ def build_nadi_index(
         programs: dict = {}
         if not s.empty:
             if sub_id == 2:
-                # Lifelong Learning: group by program_name, canonicalize to 6 sub-programs
-                for prog, grp in s.groupby("program_name"):
-                    canon = _ll_canonical(prog)
-                    if canon not in programs:
-                        programs[canon] = {"events": 0, "pax": 0}
-                    programs[canon]["events"] += _safe_int(grp["event_id"].nunique())
-                    programs[canon]["pax"]    += _safe_int(grp["participant_id"].nunique())
+                # Lifelong Learning: classify by program TEMPLATE name (ep.name) so that
+                # free-form custom titles like "TEAMWORK & PERANAN DALAM PASUKAN E-SUKAN"
+                # still resolve to the right canonical (via template "SkillForge Basketball").
+                # Vectorised groupby avoids pax double-counting when a participant attends
+                # multiple events under the same canonical category.
+                sc = s.copy()
+                sc["_canon"] = sc["program"].apply(_ll_canonical)
+                for canon, cgrp in sc.groupby("_canon"):
+                    programs[canon] = {
+                        "events": _safe_int(cgrp["event_id"].nunique()),
+                        "pax":    _safe_int(cgrp["participant_id"].nunique()),
+                    }
             else:
                 for prog, grp in s.groupby("program"):
                     if not prog:
@@ -560,7 +565,8 @@ def build_nadi_index(
         if not s.empty:
             for eid, eg in s.groupby("event_id"):
                 name = str(eg["program_name"].iloc[0] or eg["program"].iloc[0] or "")[:60]
-                subp = (_ll_canonical(name) if sub_id == 2
+                # Use template name for canonical classification (same logic as programs block above)
+                subp = (_ll_canonical(str(eg["program"].iloc[0] or "")) if sub_id == 2
                         else str(eg["program"].iloc[0] or "")[:40])
                 try:
                     mlbl = pd.Timestamp(eg["event_startdate"].iloc[0]).strftime("%b %Y")
@@ -631,13 +637,16 @@ def build_monthly(
                 "pax":    _safe_int(grp["participant_id"].nunique()),
             }
             if sub_id == 2:
-                pr: dict = {}
-                for prog, pgrp in grp.groupby("program_name"):
-                    canon = _ll_canonical(prog)
-                    if canon not in pr:
-                        pr[canon] = {"events": 0, "pax": 0}
-                    pr[canon]["events"] += _safe_int(pgrp["event_id"].nunique())
-                    pr[canon]["pax"]    += _safe_int(pgrp["participant_id"].nunique())
+                # Classify by template name (ep.name / "program" col) — same rationale as build_nadi_index
+                gc = grp.copy()
+                gc["_canon"] = gc["program"].apply(_ll_canonical)
+                pr: dict = {
+                    canon: {
+                        "events": _safe_int(cgrp["event_id"].nunique()),
+                        "pax":    _safe_int(cgrp["participant_id"].nunique()),
+                    }
+                    for canon, cgrp in gc.groupby("_canon")
+                }
                 if pr:
                     entry["pr"] = pr
             nadi_map[refid] = entry
