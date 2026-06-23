@@ -228,6 +228,18 @@ table.t-mo tfoot td.f-st {position:sticky;left:240px;z-index:3;background:#fafaf
   .top-bar{padding:8px 12px 0}
   .content{padding:0 12px 12px}
 }
+.sb-filter select{font-size:11px;padding:4px 6px;border:1px solid var(--line);border-radius:5px;background:var(--card);color:var(--t1);width:100%;margin-bottom:4px;box-sizing:border-box;height:26px}
+.sb-filter select.gf-on{border-color:var(--purple);background:#f5f4ff;color:var(--purple)}
+.q-tabs{display:flex;gap:4px;padding:0 24px 8px;flex-shrink:0;flex-wrap:wrap}
+.q-tab{padding:4px 12px;font-size:11px;border:1px solid var(--line);border-radius:14px;background:none;cursor:pointer;color:var(--t2)}
+.q-tab:hover{border-color:var(--purple);color:var(--purple)}
+.q-tab.on{background:var(--purple);border-color:var(--purple);color:#fff;font-weight:600}
+.ut-row>td{background:#fff4f4!important}
+.ut-row:hover>td{background:#ffecec!important}
+.dl-btn{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:4px 10px;border:1px solid var(--line);border-radius:6px;background:var(--card);cursor:pointer;color:var(--t2);height:29px;white-space:nowrap;flex-shrink:0}
+.dl-btn:hover{border-color:var(--green);color:var(--green)}
+.kpi[title]{cursor:help}
+.kpi[title]:hover{border-color:var(--purple)}
 </style>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
@@ -242,12 +254,17 @@ table.t-mo tfoot td.f-st {position:sticky;left:240px;z-index:3;background:#fafaf
     <div class="sb-sub" id="sb-upd">Connecting…</div>
   </div>
   <div class="sb-filter">
-    <label>Date filter</label>
+    <label>Date range</label>
     <input type="date" id="drS" value="2026-01-01" oninput="_sd=this.value" title="Start date">
     <input type="date" id="drE" oninput="_ed=this.value" title="End date">
-
+    <label style="margin-top:5px">Tech Partner (TP)</label>
+    <select id="gtp" onchange="applyGlobalFilter()"><option value="">All TP</option></select>
+    <label>DUSP</label>
+    <select id="gdusp" onchange="applyGlobalFilter()"><option value="">All DUSP</option></select>
+    <label>Phase</label>
+    <select id="gphase" onchange="applyGlobalFilter()"><option value="">All phases</option></select>
     <button class="filter-apply" onclick="applyFilter()">Fetch with filter</button>
-    <button class="filter-clr" onclick="clearFilter()">Clear &amp; fetch all</button>
+    <button class="filter-clr" onclick="clearFilter()">Clear all</button>
   </div>
   <div class="sb-nav">
     <div class="sb-label">View</div>
@@ -278,7 +295,7 @@ const fmt=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1).replace(/\.
 const fN=n=>(+n).toLocaleString();
 const ce=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const hc=v=>v===0?'h0':v<=5?'h1':v<=20?'h2':v<=99?'h3':'h4';
-let SUBS={},NI=[],STATES=[],curSub=null,curTab='nadi',tRowsAll=[],selWeek=null,selMonth=null,_monthSeq={},_sd='',_ed='',_nSort={k:'',d:1},_mSort={k:'',d:1};
+let SUBS={},NI=[],STATES=[],curSub=null,curTab='nadi',tRowsAll=[],selWeek=null,selMonth=null,_monthSeq={},_sd='',_ed='',_nSort={k:'',d:1},_mSort={k:'',d:1},_globalTP='',_globalDUSP='',_globalPhase='',_qSel=null,_qSort={k:'',d:1};
 
 function toggleSb(){
   const sb=document.querySelector('.sb'),bd=document.getElementById('sbBd');
@@ -291,7 +308,16 @@ function closeSb(){
 async function boot(){
   try{
     const[rS,rN]=await Promise.all([fetch('/api/subcategories').then(r=>r.json()),fetch('/api/sites').then(r=>r.json())]);
-    if(rN.ok){NI=rN.sites;STATES=[...new Set(NI.map(n=>n[2]))].filter(Boolean).sort();window._tpOpts=[...new Set(NI.map(n=>String(n[3]||'').trim()).filter(Boolean))].sort();window._duspOpts=[...new Set(NI.map(n=>String(n[4]||'').trim()).filter(Boolean))].sort();window._niMap=Object.fromEntries(NI.map(n=>[n[0],n]));}
+    if(rN.ok){
+      NI=rN.sites;
+      STATES=[...new Set(NI.map(n=>n[2]))].filter(Boolean).sort();
+      window._tpOpts=[...new Set(NI.map(n=>String(n[3]||'').trim()).filter(Boolean))].sort();
+      window._duspOpts=[...new Set(NI.map(n=>String(n[4]||'').trim()).filter(Boolean))].sort();
+      window._phaseOpts=[...new Set(NI.map(n=>String(n[6]||'').trim()).filter(Boolean))].sort();
+      window._niMap=Object.fromEntries(NI.map(n=>[n[0],n]));
+      const _pop=(id,opts)=>{const el=document.getElementById(id);if(!el)return;opts.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;el.appendChild(o);});};
+      _pop('gtp',window._tpOpts);_pop('gdusp',window._duspOpts);_pop('gphase',window._phaseOpts);
+    }
     if(rS.ok) rS.subcategories.forEach(s=>{SUBS[s.id]=s;});
     buildNav(); gOv(document.getElementById('navOv'));
     document.querySelector('.sb-nav').addEventListener('click',()=>{if(window.innerWidth<=768)closeSb();});
@@ -331,10 +357,29 @@ async function applyFilter(){
   }
 }
 
+function applyGlobalFilter(){
+  _globalTP=(document.getElementById('gtp')||{value:''}).value;
+  _globalDUSP=(document.getElementById('gdusp')||{value:''}).value;
+  _globalPhase=(document.getElementById('gphase')||{value:''}).value;
+  ['gtp','gdusp','gphase'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.toggle('gf-on',!!el.value);});
+  _applyGlobalToRows();
+  if(curSub)showTab(curTab||'nadi');
+}
+function _applyGlobalToRows(){
+  // Re-apply global filter to tRowsAll from NI (only call after buildShell built tRowsAll)
+  if(!window._tRowsBase)return;
+  tRowsAll=window._tRowsBase.filter(r=>{
+    if(_globalTP&&r.stp!==_globalTP)return false;
+    if(_globalDUSP&&r.sdusp!==_globalDUSP)return false;
+    if(_globalPhase&&r.sphase!==_globalPhase)return false;
+    return true;
+  });
+}
 function clearFilter(){
-  _sd='2026-01-01';_ed='';
+  _sd='2026-01-01';_ed='';_globalTP='';_globalDUSP='';_globalPhase='';
   const ds=document.getElementById('drS'),de=document.getElementById('drE');
   if(ds)ds.value='2026-01-01';if(de)de.value='';
+  ['gtp','gdusp','gphase'].forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.classList.remove('gf-on');}});
   applyFilter();
 }
 
@@ -591,12 +636,19 @@ function buildShell(id){
   const _qtrs=new Set((d.monthly&&d.monthly.months||[]).map(m=>{const[mn,yr]=(m||'').split(' ');return yr+'-Q'+Math.ceil((_MN[mn]||1)/3);}));
   const _thresh=3*Math.max(1,_qtrs.size);
   const aMap={};(nd.rows||[]).forEach(([i,e,p,pr])=>aMap[i]={e,p,pr});
-  tRowsAll=NI.map((n,i)=>{
-    const[ref,nm,state,stp='',sdusp='']=n,a=aMap[i];
+  const _tRowsBase=NI.map((n,i)=>{
+    const ref=n[0],nm=n[1],state=n[2],stp=String(n[3]||'').trim(),sdusp=String(n[4]||'').trim(),sphase=String(n[6]||'').trim(),a=aMap[i];
     const te=a?a.e:0,tp=a?a.p:0,pr=a?a.pr:{};
     const ap=Object.keys(pr).length;
-    return{i,ref,nm,state,stp:String(stp||'').trim(),sdusp:String(sdusp||'').trim(),te,tp,pr,ap,tp2:_npl,st:te<_thresh?'u':ap<_npl?'p':'a'};
+    return{i,ref,nm,state,stp,sdusp,sphase,te,tp,pr,ap,tp2:_npl,st:te<_thresh?'u':ap<_npl?'p':'a'};
   });
+  window._tRowsBase=_tRowsBase;
+  tRowsAll=(_globalTP||_globalDUSP||_globalPhase)?_tRowsBase.filter(r=>{
+    if(_globalTP&&r.stp!==_globalTP)return false;
+    if(_globalDUSP&&r.sdusp!==_globalDUSP)return false;
+    if(_globalPhase&&r.sphase!==_globalPhase)return false;
+    return true;
+  }):[..._tRowsBase];
   const _nxr=(f=>{const m=/(\d+)\s+(\w+)\s+(\d+),\s+(\d+):(\d+)/.exec(f||'');if(!m)return'—';const D=new Date(+m[3],{Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11}[m[2]]||0,+m[1],+m[4]+1,+m[5]);return D.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][D.getMonth()]+' '+D.getFullYear()+', '+String(D.getHours()).padStart(2,'0')+':'+String(D.getMinutes()).padStart(2,'0');})(d.fetched);
   document.getElementById('main').innerHTML=`
     <div class="top-bar">
@@ -610,17 +662,20 @@ function buildShell(id){
     <div class="tab-bar">
       <button class="tab-btn on" id="tN" onclick="showTab('nadi')">NADI Index</button>
       <button class="tab-btn" id="tM" onclick="showTab('monthly')">Monthly Update</button>
+      <button class="tab-btn" id="tQ" onclick="showTab('quarterly')">Quarterly Report</button>
       <button class="tab-btn" id="tW" onclick="showTab('weekly')">Weekly${totZ?` <span style="background:#fde8e8;color:var(--red);font-size:9px;padding:1px 5px;border-radius:8px;font-weight:600">${totZ}⚠</span>`:''}</button>
     </div>
     <div id="tB" style="flex:1;overflow:hidden;display:flex;flex-direction:column"></div>`;
 }
 
 function showTab(t){
-  ['tN','tM','tW'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.className='tab-btn'+(['nadi','monthly','weekly'][i]===t?' on':'');});
+  ['tN','tM','tQ','tW'].forEach((id,i)=>{const el=document.getElementById(id);if(el)el.className='tab-btn'+(['nadi','monthly','quarterly','weekly'][i]===t?' on':'');});
   const d=window._D;if(!d)return;
+  curTab=t;
   if(t!=='weekly'){selWeek=null;selMonth=null;}
   if(t==='nadi')renderNadi(d);
   else if(t==='monthly')renderMonthly(d);
+  else if(t==='quarterly')renderQuarterly(d);
   else renderWeekly(d);
 }
 
@@ -631,14 +686,12 @@ function renderNadi(d){
   const _fE=tRowsAll.reduce((s,r)=>s+r.te,0);
   const _fP=tRowsAll.reduce((s,r)=>s+r.tp,0);
   const _fA=tRowsAll.filter(r=>r.te>0).length;
-  const _fU=tRowsAll.filter(r=>r.te===0).length;
-  const _isFiltered=!!_filteredMI;
   document.getElementById('tB').innerHTML=`
     <div class="kpi-row">
-      <div class="kpi"><div class="kpi-l">Events</div><div class="kpi-v" id="nkpiE" style="color:${col}">${fN(_fE)}</div><div class="kpi-s">${_progs.length} programs</div></div>
-      <div class="kpi"><div class="kpi-l">Pax</div><div class="kpi-v" id="nkpiP">${fN(_fP)}</div><div class="kpi-s">registrations</div></div>
-      <div class="kpi"><div class="kpi-l">Active NADI</div><div class="kpi-v" id="nkpiA" style="color:var(--green)">${_fA}</div><div class="kpi-s" id="nkpiAS">${Math.round(_fA/1099*100)}% of 1,099</div></div>
-      <div class="kpi"><div class="kpi-l">Untouched</div><div class="kpi-v" id="nkpiU" style="color:var(--red)">${_fU}</div><div class="kpi-s">&lt;3 events/quarter</div></div>
+      <div class="kpi" title="Total events in this subcategory for the filtered period and sites"><div class="kpi-l">Events</div><div class="kpi-v" id="nkpiE" style="color:${col}">${fN(_fE)}</div><div class="kpi-s">${_progs.length} programs</div></div>
+      <div class="kpi" title="Unique participant registrations across all filtered NADI sites"><div class="kpi-l">Pax</div><div class="kpi-v" id="nkpiP">${fN(_fP)}</div><div class="kpi-s">registrations</div></div>
+      <div class="kpi" title="NADI centers with at least 1 event — see Quarterly Report for Untouched definition"><div class="kpi-l">Active NADI</div><div class="kpi-v" id="nkpiA" style="color:var(--green)">${_fA}</div><div class="kpi-s" id="nkpiAS">${Math.round(_fA/1099*100)}% of 1,099</div></div>
+      <div class="kpi" title="NADI with all programs active (fully engaged)"><div class="kpi-l">Full programs</div><div class="kpi-v" id="nkpiF" style="color:${col}">${tRowsAll.filter(r=>r.st==='a').length}</div><div class="kpi-s">all programs active</div></div>
     </div>
     <div class="content">
       <div class="toolbar">
@@ -646,8 +699,7 @@ function renderNadi(d){
         <select id="nst" onchange="fN2()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
         <select id="nsf" onchange="fN2()"><option value="">All status</option><option value="a">Active</option><option value="p">Partial</option><option value="u">Untouched</option></select>
         <select id="nprog" onchange="fN2()"><option value="">All programs</option>${_progs.map((p,k)=>`<option value="${k}">${ce(p)}</option>`).join('')}</select>
-        <select id="ntp" onchange="fN2()"><option value="">All TP</option>${(window._tpOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
-        <select id="ndusp" onchange="fN2()"><option value="">All DUSP</option>${(window._duspOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
+        <button class="dl-btn" onclick="dlN()" title="Export NADI Index to CSV">⬇ Export</button>
         <span class="fc" id="nfc"></span>
       </div>
       <div class="tbl-wrap"><table><thead><tr>
@@ -664,25 +716,23 @@ function fN2(){
   const st=(document.getElementById('nst')||{value:''}).value;
   const sf=(document.getElementById('nsf')||{value:''}).value;
   const np=(document.getElementById('nprog')||{value:''}).value;
-  const ntp=(document.getElementById('ntp')||{value:''}).value;
-  const ndusp=(document.getElementById('ndusp')||{value:''}).value;
   const f=tRowsAll.filter(r=>{
     if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
     if(st&&r.state!==st)return false;if(sf&&r.st!==sf)return false;
     if(np&&!r.pr[np])return false;
-    if(ntp&&r.stp!==ntp)return false;
-    if(ndusp&&r.sdusp!==ndusp)return false;
     return true;
   });
+  window._filteredNRows=f;
   if(_nSort.k){const k=_nSort.k,d=_nSort.d;f.sort((a,b)=>{const av=a[k],bv=b[k];return(typeof av==='number'?av-bv:String(av||'').localeCompare(String(bv||'')))*d;});}
   document.getElementById('nfc').textContent=fN(f.length)+' sites';
   const _fEv=f.reduce((s,r)=>s+r.te,0),_fPx=f.reduce((s,r)=>s+r.tp,0);
-  const _fAc=f.filter(r=>r.te>0).length,_fUn=f.filter(r=>r.te===0).length;
+  const _fAc=f.filter(r=>r.te>0).length;
   const _kE=document.getElementById('nkpiE');if(_kE)_kE.textContent=fN(_fEv);
   const _kP=document.getElementById('nkpiP');if(_kP)_kP.textContent=fN(_fPx);
   const _kA=document.getElementById('nkpiA');if(_kA)_kA.textContent=String(_fAc);
   const _kAS=document.getElementById('nkpiAS');if(_kAS)_kAS.textContent=Math.round(_fAc/1099*100)+'% of 1,099';
-  const _kU=document.getElementById('nkpiU');if(_kU)_kU.textContent=String(_fUn);
+  const _fFull=f.filter(r=>r.st==='a').length;
+  const _kF=document.getElementById('nkpiF');if(_kF)_kF.textContent=String(_fFull);
   const _NH={nm:'NADI site',state:'State',st:'Status',te:'Events',tp:'Pax'};
   Object.entries({nm:'nhNm',state:'nhState',st:'nhSt',te:'nhTe',tp:'nhTp'}).forEach(([k,id])=>{const el=document.getElementById(id);if(el)el.textContent=_NH[k]+(_nSort.k===k?(_nSort.d>0?' ↑':' ↓'):'');});
   document.getElementById('nTb').innerHTML=f.map((r,i)=>{
@@ -803,8 +853,7 @@ function renderMonthly(d){
         <select id="mst" onchange="fM()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
         <select id="msf" onchange="fM()"><option value="">All NADI</option><option value="a">Active only</option><option value="u">Untouched only</option></select>
         <select id="mprog" onchange="fM()"><option value="">All programs</option>${progOpts}</select>
-        <select id="mtp" onchange="fM()"><option value="">All TP</option>${(window._tpOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
-        <select id="mdusp" onchange="fM()"><option value="">All DUSP</option>${(window._duspOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
+        <button class="dl-btn" onclick="dlM()" title="Export monthly data to Excel">⬇ Export</button>
         <span class="fc" id="mfc"></span>
       </div>
       <div class="tbl-wrap">
@@ -883,8 +932,6 @@ function fM(){
   const st=(document.getElementById('mst')||{value:''}).value;
   const sf=(document.getElementById('msf')||{value:''}).value;
   const sp=(document.getElementById('mprog')||{value:''}).value;
-  const mtp=(document.getElementById('mtp')||{value:''}).value;
-  const mdusp=(document.getElementById('mdusp')||{value:''}).value;
   // Column visibility: hide non-selected program columns
   let _cs=document.getElementById('_prog-col-css');
   if(!_cs){_cs=document.createElement('style');_cs.id='_prog-col-css';document.head.appendChild(_cs);}
@@ -895,8 +942,6 @@ function fM(){
     if(st&&r.state!==st)return false;
     if(sf==='a'&&r.st==='u')return false;
     if(sf==='u'&&r.st!=='u')return false;
-    if(mtp&&r.stp!==mtp)return false;
-    if(mdusp&&r.sdusp!==mdusp)return false;
     return true;
   });
   if(_mSort.k){
@@ -1299,8 +1344,6 @@ function rWkByWeek(wk,nd){
           <select id="wkst" onchange="fWkN()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
           <select id="wkpr" onchange="fWkN()"><option value="">All programs</option>${(nd.progs||[...new Set(Object.values(wk.nw).flatMap(refs=>Object.values(refs).flat().map(e=>e.pr)).filter(Boolean))].sort()).map(p=>`<option value="${ce(p)}">${ce(p)}</option>`).join('')}</select>
           <select id="wksf" onchange="fWkN()"><option value="">All</option><option value="z">Has zero</option><option value="c">All complete</option></select>
-          <select id="wktp" onchange="fWkN()"><option value="">All TP</option>${(window._tpOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
-          <select id="wkdusp" onchange="fWkN()"><option value="">All DUSP</option>${(window._duspOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
           <span class="fc" id="wkfc"></span>
         </div>
         <div class="tbl-wrap"><table><thead><tr>
@@ -1325,10 +1368,9 @@ function fWkN(){
   const st=(document.getElementById('wkst')||{value:''}).value;
   const pr=(document.getElementById('wkpr')||{value:''}).value;
   const sf=(document.getElementById('wksf')||{value:''}).value;
-  const wktp=(document.getElementById('wktp')||{value:''}).value;
-  const wkdusp=(document.getElementById('wkdusp')||{value:''}).value;
+  const _wkAllow=_globalTP||_globalDUSP||_globalPhase?new Set(tRowsAll.map(r=>r.ref)):null;
   let rows=Object.entries(nw).map(([ref,evs])=>{
-    // filter events by program first if selected
+    if(_wkAllow&&!_wkAllow.has(ref))return null;
     const fevs=pr?evs.filter(e=>e.pr===pr):evs;
     if(pr&&!fevs.length) return null;
     const ni=NI.find(n=>n[0]===ref)||[ref,ref,'—','',''];
@@ -1339,8 +1381,6 @@ function fWkN(){
     if(!r)return false;
     if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
     if(st&&r.state!==st)return false;if(sf==='z'&&r.z===0)return false;if(sf==='c'&&(r.z>0||r.p>0))return false;
-    if(wktp&&r.stp!==wktp)return false;
-    if(wkdusp&&r.sdusp!==wkdusp)return false;
     return true;
   }).sort((a,b)=>b.z-a.z||a.nm.localeCompare(b.nm));
   const _ctx=selWeek?' · '+selWeek:selMonth?' · '+((_monthSeq[selMonth]||{}).label||selMonth):'· all weeks';
@@ -1400,8 +1440,6 @@ function rWkByNadi(wk,nd){
           <select id="bnst" onchange="fBnN()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
           <select id="bnpr" onchange="fBnN()"><option value="">All programs</option>${(nd.progs||[...new Set(Object.values(wk.nw).flatMap(refs=>Object.values(refs).flat().map(e=>e.pr)).filter(Boolean))].sort()).map(p=>`<option value="${ce(p)}">${ce(p)}</option>`).join('')}</select>
           <select id="bnsf" onchange="fBnN()"><option value="">All status</option><option value="z">Has zero</option><option value="ok">All complete</option><option value="ut">Untouched</option></select>
-          <select id="bntp" onchange="fBnN()"><option value="">All TP</option>${(window._tpOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
-          <select id="bndusp" onchange="fBnN()"><option value="">All DUSP</option>${(window._duspOpts||[]).map(v=>`<option value="${ce(v)}">${ce(v)}</option>`).join('')}</select>
           <span class="fc" id="bnfc"></span>
         </div>
         <div class="tbl-wrap"><table><thead><tr>
@@ -1423,8 +1461,7 @@ function fBnN(){
   const st=(document.getElementById('bnst')||{value:''}).value;
   const pr=(document.getElementById('bnpr')||{value:''}).value;
   const sf=(document.getElementById('bnsf')||{value:''}).value;
-  const bntp=(document.getElementById('bntp')||{value:''}).value;
-  const bndusp=(document.getElementById('bndusp')||{value:''}).value;
+  const _bnGAllow=_globalTP||_globalDUSP||_globalPhase?new Set(tRowsAll.map(r=>r.ref)):null;
 
   // Rebuild nadiMap fresh — so program filter correctly recounts zeros/completes
   const nadiMap={};
@@ -1432,6 +1469,7 @@ function fBnN(){
   Object.entries(wk.nw).forEach(([wkk,refs])=>{
     if(_bnAllow&&!_bnAllow.has(wkk))return;
     Object.entries(refs).forEach(([ref,evs])=>{
+      if(_bnGAllow&&!_bnGAllow.has(ref))return;
       const fevs=pr?evs.filter(e=>e.pr===pr):evs;
       if(!fevs.length)return;
       if(!nadiMap[ref])nadiMap[ref]={z:0,c:0,p:0,tot:0,pax:0,wks:new Set()};
@@ -1444,9 +1482,11 @@ function fBnN(){
     });
   });
 
-  const allRows=NI.map(([ref,nm,state,stp='',sdusp=''])=>{
+  const _bnBase=_bnGAllow?NI.filter(n=>_bnGAllow.has(n[0])):NI;
+  const allRows=_bnBase.map(n=>{
+    const ref=n[0],nm=n[1],state=n[2],stp=String(n[3]||'').trim(),sdusp=String(n[4]||'').trim();
     const m=nadiMap[ref];
-    return{ref,nm,state,stp:String(stp||'').trim(),sdusp:String(sdusp||'').trim(),z:m?m.z:0,c:m?m.c:0,p:m?m.p:0,tot:m?m.tot:0,pax:m?m.pax:0,wks:m?m.wks.size:0,ut:!m};
+    return{ref,nm,state,stp,sdusp,z:m?m.z:0,c:m?m.c:0,p:m?m.p:0,tot:m?m.tot:0,pax:m?m.pax:0,wks:m?m.wks.size:0,ut:!m};
   });
 
   const f=allRows.filter(r=>{
@@ -1456,8 +1496,6 @@ function fBnN(){
     if(sf==='z'&&r.z===0)return false;
     if(sf==='ok'&&(r.z>0||r.p>0||r.ut))return false;
     if(sf==='ut'&&!r.ut)return false;
-    if(bntp&&r.stp!==bntp)return false;
-    if(bndusp&&r.sdusp!==bndusp)return false;
     return true;
   }).sort((a,b)=>b.z-a.z||a.nm.localeCompare(b.nm));
 
@@ -1627,6 +1665,193 @@ function renderPanelSum(ni_idx,ref){
   document.getElementById('pb').innerHTML=html;
 }
 function closePanel(){document.getElementById('panel').classList.remove('open');document.getElementById('ov2').classList.remove('open');document.querySelectorAll('tbody tr').forEach(r=>r.classList.remove('sel'));}
+
+/* ── QUARTERLY REPORT ── */
+function renderQuarterly(d){
+  const nd=d.nadi,sm=d.monthly,col=COL[nd.mod]||'#555';
+  const months=sm.months||[];
+  const MN={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
+  const qMap={};const qOrder=[];
+  months.forEach((m,i)=>{
+    const[mn,yr]=(m||'').split(' ');
+    const mo=MN[mn]||1;
+    const qk=yr+'-Q'+Math.ceil(mo/3);
+    if(!qMap[qk]){qMap[qk]={label:'Q'+Math.ceil(mo/3)+' '+yr,key:qk,indices:[]};qOrder.push(qk);}
+    qMap[qk].indices.push(i);
+  });
+  if(!qOrder.length){
+    document.getElementById('tB').innerHTML='<div class="state-box"><div class="icon">📭</div><p>No monthly data for quarterly report.</p></div>';
+    return;
+  }
+  if(!_qSel||!qMap[_qSel])_qSel=qOrder[qOrder.length-1];
+  const curQ=qMap[_qSel];
+  const aMap={};
+  (sm.rows||[]).forEach(([i,tot,pax])=>{aMap[i]={tot:Array.isArray(tot)?tot:[],pax:Array.isArray(pax)?pax:[]};});
+  const qi=curQ.indices;
+  const THRESH=3;
+  const rows=tRowsAll.map(r=>{
+    const a=aMap[r.i]||{tot:[],pax:[]};
+    const qEv=qi.reduce((s,j)=>s+(a.tot[j]||0),0);
+    const qPx=qi.reduce((s,j)=>s+(a.pax[j]||0),0);
+    return{...r,qEv,qPx,ut:qEv<THRESH};
+  });
+  const totEv=rows.reduce((s,r)=>s+r.qEv,0);
+  const totPx=rows.reduce((s,r)=>s+r.qPx,0);
+  const activeN=rows.filter(r=>!r.ut).length;
+  const untouchN=rows.filter(r=>r.ut).length;
+  const qTabsHtml=qOrder.map(qk=>`<button class="q-tab${qk===_qSel?' on':''}" onclick="selQtr('${qk}')">${qMap[qk].label}</button>`).join('');
+  window._qRows=rows;window._qCurQ=curQ;window._qAMap=aMap;window._qMonths=months;window._qCol=col;
+  document.getElementById('tB').innerHTML=`
+    <div class="kpi-row">
+      <div class="kpi" title="Total events in ${curQ.label} across filtered NADI sites"><div class="kpi-l">Events</div><div class="kpi-v" id="qKpiEv" style="color:${col}">${fN(totEv)}</div><div class="kpi-s">${curQ.label}</div></div>
+      <div class="kpi" title="Total unique participants in ${curQ.label}"><div class="kpi-l">Pax</div><div class="kpi-v" id="qKpiPx">${fN(totPx)}</div><div class="kpi-s">registrations</div></div>
+      <div class="kpi" title="NADI with ≥3 events in ${curQ.label} — fully engaged this quarter"><div class="kpi-l">Active NADI</div><div class="kpi-v" id="qKpiA" style="color:var(--green)">${activeN}</div><div class="kpi-s">${Math.round(activeN/Math.max(tRowsAll.length,1)*100)}% of ${tRowsAll.length}</div></div>
+      <div class="kpi" title="NADI with <3 events in ${curQ.label} — need immediate intervention (highlighted red below)"><div class="kpi-l">Untouched ⚠</div><div class="kpi-v" id="qKpiU" style="color:var(--red)">${untouchN}</div><div class="kpi-s">${Math.round(untouchN/Math.max(tRowsAll.length,1)*100)}% · &lt;3 ev/quarter</div></div>
+    </div>
+    <div class="q-tabs">${qTabsHtml}</div>
+    <div class="content" style="padding-top:0">
+      <div class="toolbar">
+        <input id="qq" placeholder="Search NADI name or ref…" oninput="fQ()">
+        <select id="qst" onchange="fQ()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
+        <select id="qsf" onchange="fQ()"><option value="">All NADI</option><option value="a">Active only (≥3 ev)</option><option value="u">Untouched only (&lt;3 ev)</option></select>
+        <button class="dl-btn" onclick="dlQ()" title="Export quarterly report as CSV">⬇ Export</button>
+        <span class="fc" id="qfc"></span>
+      </div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th style="width:28px">#</th>
+        <th id="qhNm" style="cursor:pointer;user-select:none" onclick="qSortF('nm')">NADI site</th>
+        <th id="qhState" style="cursor:pointer;user-select:none" onclick="qSortF('state')">State</th>
+        <th id="qhEv" style="cursor:pointer;user-select:none;text-align:center" onclick="qSortF('qEv')">Events</th>
+        <th id="qhPx" style="cursor:pointer;user-select:none;text-align:center" onclick="qSortF('qPx')">Pax</th>
+        <th style="text-align:center">Status</th>
+      </tr></thead><tbody id="qTb"></tbody></table></div>
+    </div>`;
+  fQ();
+}
+function selQtr(qk){_qSel=qk;renderQuarterly(window._D);}
+function qSortF(k){_qSort=_qSort.k===k?{k,d:-_qSort.d}:{k,d:k==='qEv'||k==='qPx'?-1:1};fQ();}
+function fQ(){
+  const rows=window._qRows||[];
+  const col=window._qCol||'#555';
+  const curQ=window._qCurQ||{label:''};
+  const q=(document.getElementById('qq')||{value:''}).value.toLowerCase();
+  const st=(document.getElementById('qst')||{value:''}).value;
+  const sf=(document.getElementById('qsf')||{value:''}).value;
+  let f=rows.filter(r=>{
+    if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
+    if(st&&r.state!==st)return false;
+    if(sf==='a'&&r.ut)return false;
+    if(sf==='u'&&!r.ut)return false;
+    return true;
+  });
+  if(_qSort.k){const k=_qSort.k,dv=_qSort.d;f.sort((a,b)=>{const av=a[k],bv=b[k];return(typeof av==='number'?av-bv:String(av||'').localeCompare(String(bv||'')))*dv;});}
+  const _NH={nm:'NADI site',state:'State',qEv:'Events',qPx:'Pax'};
+  Object.entries({nm:'qhNm',state:'qhState',qEv:'qhEv',qPx:'qhPx'}).forEach(([k,id])=>{const el=document.getElementById(id);if(el)el.textContent=_NH[k]+(_qSort.k===k?(_qSort.d>0?' ↑':' ↓'):'');});
+  const utN=f.filter(r=>r.ut).length;
+  document.getElementById('qfc').textContent=`${utN} untouched / ${fN(f.length)} sites`;
+  const _qEv=f.reduce((s,r)=>s+r.qEv,0),_qPx=f.reduce((s,r)=>s+r.qPx,0);
+  const _qA=f.filter(r=>!r.ut).length,_qU=f.filter(r=>r.ut).length;
+  [['qKpiEv',_qEv],['qKpiPx',_qPx],['qKpiA',_qA],['qKpiU',_qU]].forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.textContent=fN(v);});
+  document.getElementById('qTb').innerHTML=f.map((r,i)=>{
+    const sp=r.ut?`<span class="pill p-r" title="${r.qEv} events — below threshold of 3/quarter">⚠ Untouched</span>`:`<span class="pill p-g">Active</span>`;
+    return `<tr class="${r.ut?'ut-row':''}" onclick="openQPanel(${r.i})" id="qi${r.i}" style="cursor:pointer" title="${r.ut?'Click for drill-down — this NADI needs attention':''}">
+      <td style="color:var(--t3);font-size:10px">${i+1}</td>
+      <td><div style="font-weight:${r.qEv?600:400};color:${r.ut?'var(--red)':'var(--t1)'}">${ce(r.nm)}</div><div style="font-size:10px;color:var(--t3)">${r.ref}</div></td>
+      <td style="font-size:11px;color:var(--t2)">${ce(r.state)}</td>
+      <td style="text-align:center;font-weight:${r.qEv?700:400};color:${r.qEv<3&&r.qEv>0?'var(--amber)':r.qEv===0?'var(--red)':col}">${r.qEv||'—'}</td>
+      <td style="text-align:center;color:var(--t2)">${r.qPx||'—'}</td>
+      <td style="text-align:center">${sp}</td>
+    </tr>`;
+  }).join('');
+}
+function openQPanel(ni_idx){
+  const d=window._D;if(!d)return;
+  const curQ=window._qCurQ||{label:'',indices:[]};
+  const aMap=window._qAMap||{};
+  const months=window._qMonths||[];
+  const col=window._qCol||'#555';
+  const ni=NI[ni_idx]||[],[ref,nm2,state]=ni;
+  const a=aMap[ni_idx]||{tot:[],pax:[]};
+  const qi=curQ.indices||[];
+  const dispMonths=qi.map(j=>months[j]||'');
+  const dispEv=qi.map(j=>(a.tot||[])[j]||0);
+  const dispPx=qi.map(j=>(a.pax||[])[j]||0);
+  const totEv=dispEv.reduce((s,v)=>s+v,0),totPx=dispPx.reduce((s,v)=>s+v,0);
+  const isUt=totEv<3;
+  const mH=m=>{const[mn,yr]=(m||'').split(' ');return mn+"'"+yr.slice(2);};
+  const maxV=Math.max(...dispEv,1);
+  const bars=dispMonths.map((m,i)=>{
+    const v=dispEv[i]||0,p=dispPx[i]||0,h=v>0?Math.max(4,Math.round(v/maxV*80)):2;
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px" title="${m}: ${v} events · ${p} pax">
+      <div style="font-size:8px;color:var(--t2);font-weight:${v?600:400};text-align:center">${v||''}</div>
+      <div style="flex:1;display:flex;align-items:flex-end;width:100%"><div style="width:100%;height:${h}px;background:${v?col:'#e8e6e3'};border-radius:2px 2px 0 0"></div></div>
+      <span style="font-size:7px;color:var(--t3);white-space:nowrap">${mH(m)}</span></div>`;
+  }).join('');
+  document.getElementById('ptitle').textContent=nm2||ref;
+  document.getElementById('pref').textContent=`${state||''} · ${ref}`;
+  document.getElementById('ptabs').innerHTML='';
+  document.getElementById('pb').innerHTML=`
+    ${isUt?`<div class="ut-banner"><div class="ut-banner-t">⚠ Untouched NADI — ${curQ.label}</div>
+      <div class="ut-banner-s">Only ${totEv} event${totEv!==1?'s':''} this quarter. Minimum required: 3. SSO should activate programs.</div></div>`:''}
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Events by month — ${curQ.label}</div>
+      <div style="display:flex;align-items:flex-end;gap:3px;height:100px">${bars}</div>
+    </div>
+    <div style="display:flex;gap:20px;font-size:12px;color:var(--t2);border-top:1px solid var(--line2);padding-top:10px">
+      <div><div style="font-size:10px;color:var(--t3)">Total events</div><div style="font-size:20px;font-weight:700;color:${isUt?'var(--red)':col}">${totEv}</div><div style="font-size:9px;color:var(--t3)">min 3 required</div></div>
+      <div><div style="font-size:10px;color:var(--t3)">Total pax</div><div style="font-size:20px;font-weight:700">${fN(totPx)}</div></div>
+      <div><div style="font-size:10px;color:var(--t3)">Status</div><div style="font-size:13px;font-weight:700;color:${isUt?'var(--red)':'var(--green)'}${isUt?';margin-top:4px':';margin-top:4px'}">${isUt?'⚠ Untouched':'✓ Active'}</div></div>
+    </div>`;
+  document.getElementById('panel').classList.add('open');
+  document.getElementById('ov2').classList.add('open');
+}
+
+/* ── DOWNLOAD / EXPORT ── */
+function dlCSV(rows,filename){
+  const csv=rows.map(r=>r.map(v=>{const s=String(v??'');return(s.includes(',')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s;}).join(',')).join('\r\n');
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download=filename;a.click();
+}
+function dlN(){
+  const f=window._filteredNRows||tRowsAll;
+  const rows=[['#','Ref ID','NADI Site','State','TP','DUSP','Phase','Events','Pax','Status']];
+  f.forEach((r,i)=>rows.push([i+1,r.ref,r.nm,r.state,r.stp,r.sdusp,r.sphase||'',r.te,r.tp,r.st==='u'?'Untouched':r.st==='p'?'Partial':'Active']));
+  dlCSV(rows,'nadi_index_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+function dlM(){
+  if(!window.XLSX){alert('SheetJS not loaded');return;}
+  const d=window._D;if(!d)return;
+  const f=window._filteredRows||tRowsAll;
+  const aMap=window._mAMap||{};
+  const progs=window._mProgs||[];
+  const displayPis=window._mDisplayPis||progs.map((_,i)=>i);
+  const mi=null;
+  const dataMonthIdx=selMonth!==null?selMonth:null;
+  const headers=['Ref ID','NADI Site','State','TP','DUSP'];
+  displayPis.forEach(pi=>{headers.push((progs[pi]||'P'+pi)+' Ev',(progs[pi]||'P'+pi)+' Pax');});
+  headers.push('Total Ev','Total Pax');
+  const data=[headers];
+  f.forEach(r=>{
+    const a=aMap[r.i]||{tot:[],pax:[],pr:{}};
+    const row=[r.ref,r.nm,r.state,r.stp,r.sdusp];
+    let totEv=0,totPx=0;
+    displayPis.forEach(pi=>{
+      const pr=(a.pr[String(pi)]||{}),evArr=pr.ev||[],pxArr=pr.px||[];
+      const ev=dataMonthIdx!==null?(evArr[dataMonthIdx]||0):evArr.reduce((s,v)=>s+(v||0),0);
+      const px=dataMonthIdx!==null?(pxArr[dataMonthIdx]||0):pxArr.reduce((s,v)=>s+(v||0),0);
+      row.push(ev,px);totEv+=ev;totPx+=px;
+    });
+    row.push(totEv,totPx);data.push(row);
+  });
+  const ws=XLSX.utils.aoa_to_sheet(data);
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,'Monthly Update',ws);
+  XLSX.writeFile(wb,'monthly_update_'+new Date().toISOString().slice(0,10)+'.xlsx');
+}
+function dlQ(){
+  const f=window._qRows||[];const curQ=window._qCurQ||{label:'Q'};
+  const rows=[['#','Ref ID','NADI Site','State','TP','DUSP','Phase','Events','Pax','Status']];
+  f.forEach((r,i)=>rows.push([i+1,r.ref,r.nm,r.state,r.stp,r.sdusp,r.sphase||'',r.qEv,r.qPx,r.ut?'Untouched':'Active']));
+  dlCSV(rows,'quarterly_report_'+curQ.label.replace(/ /g,'_')+'_'+new Date().toISOString().slice(0,10)+'.csv');
+}
 
 boot();
 </script>
