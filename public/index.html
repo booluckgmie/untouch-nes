@@ -603,22 +603,33 @@ function normalizeSubData(raw,id){
       const idx=refToIdx[ref];if(idx===undefined)return;
       if(!mMap[idx])mMap[idx]={tot:new Array(nm).fill(0),pax:new Array(nm).fill(0),pr:{}};
       mMap[idx].tot[mi]=data.events||0;mMap[idx].pax[mi]=data.pax||0;
-    });
-  });
-  // Distribute per-program totals proportionally across months
-  raw.nadi.forEach(n=>{
-    const idx=refToIdx[n.refid];if(idx===undefined||!mMap[idx])return;
-    const v=mMap[idx],monthSum=v.tot.reduce((s,x)=>s+x,0);if(!monthSum)return;
-    progs.forEach((pn,k)=>{
-      const pg=(n.programs||{})[pn];if(!pg||!(pg.events||pg.pax))return;
-      let remEv=pg.events||0,remPx=pg.pax||0;const ev=[],px=[];
-      for(let i=0;i<nm;i++){
-        if(i===nm-1){ev.push(Math.max(0,remEv));px.push(Math.max(0,remPx));}
-        else{const frac=v.tot[i]/monthSum;const te=Math.round((pg.events||0)*frac),tp=Math.round((pg.pax||0)*frac);ev.push(te);px.push(tp);remEv-=te;remPx-=tp;}
+      // sub_id=2: backend now emits actual per-program monthly data (canonical names)
+      if(id===2&&data.pr){
+        progs.forEach((pn,k)=>{
+          const pg=data.pr[pn];if(!pg)return;
+          if(!mMap[idx].pr[String(k)])mMap[idx].pr[String(k)]={ev:new Array(nm).fill(0),px:new Array(nm).fill(0)};
+          mMap[idx].pr[String(k)].ev[mi]=pg.events||0;
+          mMap[idx].pr[String(k)].px[mi]=pg.pax||0;
+        });
       }
-      v.pr[String(k)]={ev,px};
     });
   });
+  // For non-LL subcategories: distribute per-program totals proportionally across months
+  if(id!==2){
+    raw.nadi.forEach(n=>{
+      const idx=refToIdx[n.refid];if(idx===undefined||!mMap[idx])return;
+      const v=mMap[idx],monthSum=v.tot.reduce((s,x)=>s+x,0);if(!monthSum)return;
+      progs.forEach((pn,k)=>{
+        const pg=(n.programs||{})[pn];if(!pg||!(pg.events||pg.pax))return;
+        let remEv=pg.events||0,remPx=pg.pax||0;const ev=[],px=[];
+        for(let i=0;i<nm;i++){
+          if(i===nm-1){ev.push(Math.max(0,remEv));px.push(Math.max(0,remPx));}
+          else{const frac=v.tot[i]/monthSum;const te=Math.round((pg.events||0)*frac),tp=Math.round((pg.pax||0)*frac);ev.push(te);px.push(tp);remEv-=te;remPx-=tp;}
+        }
+        v.pr[String(k)]={ev,px};
+      });
+    });
+  }
   const monthlyRows=Object.entries(mMap).map(([idx,v])=>[+idx,v.tot,v.pax,v.pr]);
   const monthlyDict={months,progs,rows:monthlyRows};
 
