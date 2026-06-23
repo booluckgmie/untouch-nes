@@ -1524,25 +1524,37 @@ function fWkN(){
       <td>${r.c?`<span style="color:var(--green)">${r.c}</span>`:'—'}</td>
     </tr>`).join('');
 }
+function _mkEvRow(e,col){return`<div class="ev-row">
+  <div class="ev-prog" style="color:${col}">${ce(e.pr||'')}</div>
+  <div class="ev-name">${ce(e.pn||'')}</div>
+  <div class="ev-meta">
+    <span class="${e.st==='z'?'att-z':e.st==='c'?'att-ok':'att-p'}">att: ${e.at}/${e.tp}</span>
+    ${e.sso?`<span class="sso-tag">${ce(e.sso)}</span>`:''}
+  </div></div>`;}
+function _mkStatusHtml(allEvs,col){
+  const z=allEvs.filter(e=>e.st==='z'),p=allEvs.filter(e=>e.st==='p'),c=allEvs.filter(e=>e.st==='c');
+  let h='';
+  if(z.length)h+=`<div class="ut-banner" style="margin-bottom:10px"><div class="ut-banner-t">⚠ ${z.length} event${z.length>1?'s':''} with 0 attendance</div><div class="ut-banner-s">SSO must record attendance within 7 days.</div></div>`;
+  if(z.length)h+=`<div class="ev-sec-hdr" style="color:var(--red)">▲ ZERO ATTENDED (${z.length})</div>${z.map(e=>_mkEvRow(e,col)).join('')}`;
+  if(p.length)h+=`<div class="ev-sec-hdr" style="margin-top:12px;color:var(--amber)">⊙ PARTIAL (${p.length})</div>${p.map(e=>_mkEvRow(e,col)).join('')}`;
+  if(c.length)h+=`<div class="ev-sec-hdr" style="margin-top:12px;color:var(--green)">✓ COMPLETE (${c.length})</div>${c.map(e=>_mkEvRow(e,col)).join('')}`;
+  return h||`<div style="font-size:11px;color:var(--t3);padding:8px">No detailed events recorded.</div>`;
+}
 function oWkNP(ref){
   const d=window._D;if(!d)return;const wk=d.weekly,col=COL[d.nadi.mod]||'#555';
   const ni=NI.find(n=>n[0]===ref)||[ref,ref,'—'];
   document.querySelectorAll('#wkNTb tr').forEach(r=>r.classList.remove('sel'));
   const el=document.getElementById('wkr_'+ref.replace(/[^a-z0-9]/gi,'_'));if(el)el.classList.add('sel');
   document.getElementById('wkPT').textContent=ni[1];
-  document.getElementById('wkPRf').textContent=`${ref} · ${ni[2]}${selWeek?' · '+selWeek:''}`;
+  document.getElementById('wkPRf').textContent=`${ref} · ${ni[2]}`;
   document.getElementById('wkPR').className='split-r open';
-  const activeWks=selWeek?[selWeek]:wk.weeks.filter(w=>(wk.nw[w.k]||{})[ref]).map(w=>w.k);
-  const rows=activeWks.map(wkk=>{const evs=(wk.nw[wkk]||{})[ref]||[];const wInfo=wk.weeks.find(w=>w.k===wkk)||{};const pax=evs.reduce((s,e)=>s+(e.at||0),0);
-    const hasDetail=evs.some(e=>e.pn);
-    if(hasDetail){return`<div style="margin-bottom:12px"><div class="ev-sec-hdr">${wkk}${wInfo.l?' · '+wInfo.l:''}</div>
-      ${evs.map(e=>`<div class="ev-row"><div class="ev-prog" style="color:${col}">${ce(e.pr)}</div><div class="ev-name">${ce(e.pn)}</div>
-        <div class="ev-meta"><span class="${e.st==='z'?'att-z':e.st==='c'?'att-ok':'att-p'}">${e.st==='z'?'⚠ 0 att':'att: '+e.at+'/'+e.tp}</span><span class="sso-tag">${e.sso}</span></div></div>`).join('')}</div>`;}
-    return`<div style="margin-bottom:8px"><div class="ev-sec-hdr" style="color:${col}">${wkk}${wInfo.l?' · '+wInfo.l:''}</div>
-      <div class="ev-row"><div class="ev-prog" style="color:${col};font-size:11px;font-weight:600">${evs.length} events</div>
-      <div class="ev-meta"><span class="att-ok">${fN(pax)} pax</span></div></div></div>`;
-  }).join('');
-  document.getElementById('wkPB').innerHTML=rows||`<div style="font-size:11px;color:var(--t3);padding:8px">No events in this period.</div>`;
+  const activeWkSet=selWeek?new Set([selWeek]):selMonth?new Set((_monthSeq[selMonth]||{}).wks||[]):null;
+  const allEvs=[];
+  Object.entries(wk.nw).forEach(([wkk,refs])=>{
+    if(activeWkSet&&!activeWkSet.has(wkk))return;
+    (refs[ref]||[]).filter(e=>e.pn).forEach(e=>allEvs.push(e));
+  });
+  document.getElementById('wkPB').innerHTML=_mkStatusHtml(allEvs,col);
 }
 function cWkP(){document.getElementById('wkPR').className='split-r';document.querySelectorAll('#wkNTb tr').forEach(r=>r.classList.remove('sel'));}
 
@@ -1654,26 +1666,13 @@ function oBnP(ref){
       ${d.nadi.progs.map(p=>`<div class="ev-row"><div class="ev-meta"><span style="color:var(--t3)">${ce(p)}</span><span class="att-z">0 events</span></div></div>`).join('')}`;
     return;
   }
-  const byWeek={};Object.entries(wk.nw).forEach(([wkk,refs])=>{if(refs[ref])byWeek[wkk]=refs[ref];});
-  const wksSorted=wk.weeks.filter(w=>byWeek[w.k]);
-  let html='';
-  wksSorted.forEach(w=>{
-    const evs=byWeek[w.k];const z=evs.filter(e=>e.st==='z');
-    const hasDetail=evs.some(e=>e.pn);
-    if(hasDetail){
-      html+=`<div style="margin-bottom:12px"><div class="ev-sec-hdr" style="${z.length?'color:var(--red)':''}">${w.k} · ${w.l} ${z.length?`<span style="color:var(--red)">⚠ ${z.length} zero</span>`:''}</div>
-        ${evs.map(e=>`<div class="ev-row" style="${e.st==='z'?'background:#fff8f8;border-radius:4px;padding:5px 8px;margin-bottom:2px':''}">
-          <div class="ev-prog" style="color:${col}">${ce(e.pr)}</div><div class="ev-name">${ce(e.pn)}</div>
-          <div class="ev-meta"><span class="${e.st==='z'?'att-z':e.st==='c'?'att-ok':'att-p'}">${e.st==='z'?'⚠ 0':'att:'} ${e.at}/${e.tp}</span>
-          <span class="sso-tag">${e.sso}</span></div></div>`).join('')}</div>`;
-    } else {
-      const pax=evs.reduce((s,e)=>s+(e.at||0),0);
-      html+=`<div style="margin-bottom:8px"><div class="ev-sec-hdr" style="color:${col}">${w.k} · ${w.l}</div>
-        <div class="ev-row"><div class="ev-prog" style="color:${col};font-size:11px;font-weight:600">${evs.length} events</div>
-        <div class="ev-meta"><span class="att-ok">${fN(pax)} pax</span></div></div></div>`;
-    }
+  const activeWkSet2=selWeek?new Set([selWeek]):selMonth?new Set((_monthSeq[selMonth]||{}).wks||[]):null;
+  const allEvs2=[];
+  Object.entries(wk.nw).forEach(([wkk,refs])=>{
+    if(activeWkSet2&&!activeWkSet2.has(wkk))return;
+    (refs[ref]||[]).filter(e=>e.pn).forEach(e=>allEvs2.push(e));
   });
-  document.getElementById('bnPB').innerHTML=html||`<div style="font-size:11px;color:var(--t3);padding:8px">No events found.</div>`;
+  document.getElementById('bnPB').innerHTML=_mkStatusHtml(allEvs2,col);
 }
 function cBnP(){document.getElementById('bnPR').className='split-r';document.querySelectorAll('#bnTb tr').forEach(r=>r.classList.remove('sel'));}
 
