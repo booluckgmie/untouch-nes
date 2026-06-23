@@ -568,7 +568,7 @@ function normalizeSubData(raw,id){
 
   // For Lifelong Learning, collapse raw program_name values into 3 pillar groups
   if(id===2){
-    const _llPillar=pn=>{const p=(pn||'').toLowerCase();if(p.includes('tiny')||p.includes('techie'))return'NADI-TinyTechies';if(p.includes('skill')||p.includes('esport')||p.includes('mahir'))return'NADI-SkillForge';return'NADI-Nurture';};
+    const _llPillar=pn=>{const p=(pn||'').toLowerCase();if(p.includes('tiny')||p.includes('techie'))return'TINYTECHIES';if(p.includes('esport'))return'ESPORT';if(p.includes('mahir'))return'MAHIR';if(p.includes('tuisyen')||p.includes('tuition')||p.includes('guidance'))return'TUISYEN RAKYAT';if(p.includes('ekelas')||p.includes('e-kelas'))return'EKELAS';if(p.includes('cyber')||p.includes('siber')||p.includes('security'))return'CYBERSECURITY';if(p.includes('skillforge')||p.includes('skill'))return'ESPORT';return'CYBERSECURITY';};
     raw.nadi.forEach(n=>{
       if(!n.programs||!Object.keys(n.programs).length)return;
       const rem={};
@@ -1710,6 +1710,8 @@ function closePanel(){document.getElementById('panel').classList.remove('open');
 function renderQuarterly(d){
   const nd=d.nadi,sm=d.monthly,col=COL[nd.mod]||'#555';
   const months=sm.months||[];
+  const progs=sm.progs||nd.progs||[];
+  const PROG_COLORS=['#4c44b0','#0b7575','#0b7a58','#a05208','#1650a0','#7a0b5a','#5a7a0b','#0b3d7a'];
   const MN={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
   const qMap={};const qOrder=[];
   months.forEach((m,i)=>{
@@ -1725,15 +1727,33 @@ function renderQuarterly(d){
   }
   if(!_qSel||!qMap[_qSel])_qSel=qOrder[qOrder.length-1];
   const curQ=qMap[_qSel];
-  const aMap={};
-  (sm.rows||[]).forEach(([i,tot,pax])=>{aMap[i]={tot:Array.isArray(tot)?tot:[],pax:Array.isArray(pax)?pax:[]};});
   const qi=curQ.indices;
   const THRESH=3;
+  // Total events/pax aMap
+  const aMap={};
+  (sm.rows||[]).forEach(([i,tot,pax])=>{aMap[i]={tot:Array.isArray(tot)?tot:[],pax:Array.isArray(pax)?pax:[]};});
+  // Per-program aMap from monthly pr field
+  const prAMap={};
+  (sm.rows||[]).forEach(([i,,,pr])=>{if(pr&&typeof pr==='object')prAMap[i]=pr;});
+  // Pillar config (same as Monthly Update)
+  const PILL_CFG={2:[
+    {name:'NURTURE',    progs:['CYBERSECURITY','EKELAS','TUISYEN RAKYAT','NADI-Nurture']},
+    {name:'SKILLFORGE', progs:['ESPORT','MAHIR','NADI-SkillForge']},
+    {name:'TINYTECHIES',progs:['TINYTECHIES','NADI-TinyTechies']},
+  ]};
+  const _pRaw=(PILL_CFG[d.sub_id]||[]).map(pl=>({name:pl.name,pis:pl.progs.map(pn=>progs.indexOf(pn)).filter(i=>i>=0)})).filter(pl=>pl.pis.length>0);
+  const pillars=_pRaw.length?_pRaw:null;
+  const displayPis=pillars?pillars.flatMap(pl=>pl.pis):[];
+  const piToPl={};
+  if(pillars)pillars.forEach((pl,pli)=>pl.pis.forEach(pi=>{piToPl[pi]=pli;}));
+  // Build rows
   const rows=tRowsAll.map(r=>{
     const a=aMap[r.i]||{tot:[],pax:[]};
     const qEv=qi.reduce((s,j)=>s+(a.tot[j]||0),0);
     const qPx=qi.reduce((s,j)=>s+(a.pax[j]||0),0);
-    return{...r,qEv,qPx,ut:qEv<THRESH};
+    const qProg={};
+    displayPis.forEach(pi=>{const pd=(prAMap[r.i]||{})[String(pi)]||{};qProg[pi]=qi.reduce((s,j)=>s+((pd.ev||[])[j]||0),0);});
+    return{...r,qEv,qPx,ut:qEv<THRESH,qProg};
   });
   const totEv=rows.reduce((s,r)=>s+r.qEv,0);
   const totPx=rows.reduce((s,r)=>s+r.qPx,0);
@@ -1741,6 +1761,37 @@ function renderQuarterly(d){
   const untouchN=rows.filter(r=>r.ut).length;
   const qTabsHtml=qOrder.map(qk=>`<button class="q-tab${qk===_qSel?' on':''}" onclick="selQtr('${qk}')">${qMap[qk].label}</button>`).join('');
   window._qRows=rows;window._qCurQ=curQ;window._qAMap=aMap;window._qMonths=months;window._qCol=col;
+  window._qPillars=pillars;window._qDisplayPis=displayPis;window._qPiToPl=piToPl;window._qProgs=progs;window._qProgColors=PROG_COLORS;
+  // Build thead
+  let theadHtml;
+  if(pillars){
+    const hPillar=pillars.map((pl,pli)=>{
+      const pc=PROG_COLORS[pli%PROG_COLORS.length];
+      return `<th colspan="${pl.pis.length}" style="text-align:center;padding:4px 6px;font-size:9px;font-weight:700;color:${pc};border-left:1px solid var(--line2)">${ce(pl.name)}</th>`;
+    }).join('');
+    const hProg=displayPis.map(pi=>{
+      const pli=piToPl[pi];const pc=PROG_COLORS[pli%PROG_COLORS.length];const pn=progs[pi]||'';
+      return `<th style="text-align:center;padding:3px 5px;font-size:8px;font-weight:700;color:${pc};border-left:1px solid var(--line2);white-space:nowrap" title="${ce(pn)}">${ce(pn.length>11?pn.slice(0,10)+'…':pn)}</th>`;
+    }).join('');
+    theadHtml=`<tr>
+      <th rowspan="2" style="width:28px">#</th>
+      <th id="qhNm" rowspan="2" style="cursor:pointer;user-select:none;vertical-align:bottom" onclick="qSortF('nm')">NADI site</th>
+      <th id="qhState" rowspan="2" style="cursor:pointer;user-select:none;vertical-align:bottom" onclick="qSortF('state')">State</th>
+      ${hPillar}
+      <th id="qhEv" rowspan="2" style="cursor:pointer;user-select:none;text-align:center;vertical-align:bottom;border-left:2px solid var(--line)" onclick="qSortF('qEv')">Events</th>
+      <th id="qhPx" rowspan="2" style="cursor:pointer;user-select:none;text-align:center;vertical-align:bottom" onclick="qSortF('qPx')">Pax</th>
+      <th rowspan="2" style="text-align:center;vertical-align:bottom">Status</th>
+    </tr><tr>${hProg}</tr>`;
+  } else {
+    theadHtml=`<tr>
+      <th style="width:28px">#</th>
+      <th id="qhNm" style="cursor:pointer;user-select:none" onclick="qSortF('nm')">NADI site</th>
+      <th id="qhState" style="cursor:pointer;user-select:none" onclick="qSortF('state')">State</th>
+      <th id="qhEv" style="cursor:pointer;user-select:none;text-align:center" onclick="qSortF('qEv')">Events</th>
+      <th id="qhPx" style="cursor:pointer;user-select:none;text-align:center" onclick="qSortF('qPx')">Pax</th>
+      <th style="text-align:center">Status</th>
+    </tr>`;
+  }
   document.getElementById('tB').innerHTML=`
     <div class="kpi-row">
       <div class="kpi" title="Total events in ${curQ.label} across filtered NADI sites"><div class="kpi-l">Events</div><div class="kpi-v" id="qKpiEv" style="color:${col}">${fN(totEv)}</div><div class="kpi-s">${curQ.label}</div></div>
@@ -1757,14 +1808,7 @@ function renderQuarterly(d){
         <button class="dl-btn" onclick="dlQ()" title="Export quarterly report as CSV">⬇ Export</button>
         <span class="fc" id="qfc"></span>
       </div>
-      <div class="tbl-wrap"><table><thead><tr>
-        <th style="width:28px">#</th>
-        <th id="qhNm" style="cursor:pointer;user-select:none" onclick="qSortF('nm')">NADI site</th>
-        <th id="qhState" style="cursor:pointer;user-select:none" onclick="qSortF('state')">State</th>
-        <th id="qhEv" style="cursor:pointer;user-select:none;text-align:center" onclick="qSortF('qEv')">Events</th>
-        <th id="qhPx" style="cursor:pointer;user-select:none;text-align:center" onclick="qSortF('qPx')">Pax</th>
-        <th style="text-align:center">Status</th>
-      </tr></thead><tbody id="qTb"></tbody></table></div>
+      <div class="tbl-wrap"><table class="t-mo${pillars?' t-pillar':''}"><thead>${theadHtml}</thead><tbody id="qTb"></tbody></table></div>
     </div>`;
   fQ();
 }
@@ -1774,6 +1818,11 @@ function fQ(){
   const rows=window._qRows||[];
   const col=window._qCol||'#555';
   const curQ=window._qCurQ||{label:''};
+  const pillars=window._qPillars;
+  const displayPis=window._qDisplayPis||[];
+  const piToPl=window._qPiToPl||{};
+  const progs=window._qProgs||[];
+  const PROG_COLORS=window._qProgColors||['#4c44b0','#0b7575','#0b7a58','#a05208'];
   const q=(document.getElementById('qq')||{value:''}).value.toLowerCase();
   const st=(document.getElementById('qst')||{value:''}).value;
   const sf=(document.getElementById('qsf')||{value:''}).value;
@@ -1794,11 +1843,17 @@ function fQ(){
   [['qKpiEv',_qEv],['qKpiPx',_qPx],['qKpiA',_qA],['qKpiU',_qU]].forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.textContent=fN(v);});
   document.getElementById('qTb').innerHTML=f.map((r,i)=>{
     const sp=r.ut?`<span class="pill p-r" title="${r.qEv} events — below threshold of 3/quarter">⚠ Untouched</span>`:`<span class="pill p-g">Active</span>`;
+    const progCells=pillars?displayPis.map(pi=>{
+      const pli=piToPl[pi];const pc=PROG_COLORS[pli%PROG_COLORS.length];
+      const v=(r.qProg||{})[pi]||0;
+      return `<td style="text-align:center;font-size:11px;font-weight:${v?600:400};color:${v?pc:'var(--t3)'};border-left:1px solid var(--line2)">${v||'·'}</td>`;
+    }).join(''):'';
     return `<tr class="${r.ut?'ut-row':''}" onclick="openQPanel(${r.i})" id="qi${r.i}" style="cursor:pointer" title="${r.ut?'Click for drill-down — this NADI needs attention':''}">
       <td style="color:var(--t3);font-size:10px">${i+1}</td>
       <td><div style="font-weight:${r.qEv?600:400};color:${r.ut?'var(--red)':'var(--t1)'}">${ce(r.nm)}</div><div style="font-size:10px;color:var(--t3)">${r.ref}</div></td>
       <td style="font-size:11px;color:var(--t2)">${ce(r.state)}</td>
-      <td style="text-align:center;font-weight:${r.qEv?700:400};color:${r.qEv<3&&r.qEv>0?'var(--amber)':r.qEv===0?'var(--red)':col}">${r.qEv||'—'}</td>
+      ${progCells}
+      <td style="text-align:center;font-weight:${r.qEv?700:400};color:${r.qEv<3&&r.qEv>0?'var(--amber)':r.qEv===0?'var(--red)':col};border-left:${pillars?'2px solid var(--line)':'none'}">${r.qEv||'—'}</td>
       <td style="text-align:center;color:var(--t2)">${r.qPx||'—'}</td>
       <td style="text-align:center">${sp}</td>
     </tr>`;
