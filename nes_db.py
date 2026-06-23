@@ -134,7 +134,7 @@ def _fetch_events(conn, event_ids: list) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _fetch_participants(conn, event_ids: list, cur_name: str) -> pd.DataFrame:
-    """Participants + home NADI site + site geographic / admin columns."""
+    """Participants + event site + member demographic columns."""
     sql = f"""
     SELECT
         ep.event_id,
@@ -160,12 +160,20 @@ def _fetch_participants(conn, event_ids: list, cur_name: str) -> pd.DataFrame:
         COALESCE(mp.income_range::text, '')                 AS income_range,
         COALESCE(mp.nationality_id::text, '')               AS nationality_id,
         COALESCE(mp.registration_status::text, '')          AS registration_status,
-        -- ── Member's home NADI site ────────────────────────────────────────
+        -- ── Event site (where the event was held) — aligns with pipeline ──
+        COALESCE(esp.refid_mcmc, '')                        AS event_site_refid_mcmc,
+        COALESCE(esp.sitename, '')                          AS event_site_name,
+        COALESCE(es_state.name, '')                         AS event_site_state,
+        COALESCE(es_org.name, '')                           AS event_site_tp,
+        COALESCE(es_org.description, '')                    AS event_site_dusp,
+        COALESCE(es_ph.name, '')                            AS event_site_phase,
+        COALESCE(es_parl.name, '')                          AS event_site_parliament,
+        COALESCE(es_dun.name, '')                           AS event_site_dun,
+        -- ── Keep home-NADI cols for backward compat ───────────────────────
         ns.refid_mcmc,
         COALESCE(nsp.sitename, 'Site-' || ns.id::text)     AS nadi_name,
         COALESCE(st.name, '')                               AS state,
         ns.standard_code,
-        -- ── Home NADI geographic / admin columns ──────────────────────────
         COALESCE(org.name, '')                              AS tp,
         COALESCE(org.description, '')                       AS dusp,
         COALESCE(reg.bm, '')                                AS region_bm,
@@ -179,6 +187,14 @@ def _fetch_participants(conn, event_ids: list, cur_name: str) -> pd.DataFrame:
         COALESCE(u12.mobile_no, '')                         AS under12_phone,
         COALESCE(g2.bm, '')                                 AS under12_gender
     FROM public.nd_event_participant ep
+    -- Event site: ep.ref_id → nd_site_profile (same join as nadi_pipeline.py)
+    LEFT JOIN public.nd_site_profile                esp     ON esp.id    = ep.ref_id
+    LEFT JOIN public.nd_state                       es_state ON es_state.id = esp.state_id
+    LEFT JOIN public.organizations                  es_org   ON es_org.id   = esp.dusp_tp_id
+    LEFT JOIN public.nd_phases                      es_ph    ON es_ph.id    = esp.phase_id
+    LEFT JOIN public.nd_parliaments                 es_parl  ON es_parl.id  = esp.parliament_rfid
+    LEFT JOIN public.nd_duns                        es_dun   ON es_dun.id   = esp.dun_rfid
+    -- Member profile + home NADI (kept for demographics/backward compat)
     LEFT JOIN public.nd_member_profile              mp   ON mp.id  = ep.member_id
     LEFT JOIN public.nd_site                        ns   ON ns.id  = mp.ref_id
     LEFT JOIN public.nd_site_profile                nsp  ON nsp.id = ns.site_profile_id
@@ -276,31 +292,34 @@ def fetch(subcategory_id: int) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def fetch_all_sites() -> pd.DataFrame:
+    """
+    All NADI site profiles — uses nd_site_profile.refid_mcmc so it matches
+    the event_site_refid_mcmc produced by _fetch_participants (ep.ref_id → nd_site_profile).
+    """
     conn = psycopg2.connect(**PG_CONFIG)
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
                 SELECT
-                    ns.refid_mcmc,
-                    ns.standard_code,
-                    COALESCE(nsp.sitename, 'Site-' || ns.id::text) AS nadi_name,
-                    COALESCE(st.name, '')                           AS state,
-                    COALESCE(org.name, '')                          AS tp,
-                    COALESCE(org.description, '')                   AS dusp,
-                    COALESCE(reg.bm, '')                            AS region_bm,
-                    COALESCE(ph.name, '')                           AS phase_name,
-                    COALESCE(parl.name, '')                         AS parliament_name,
-                    COALESCE(dun.name, '')                          AS dun_name,
-                    COALESCE(muk.name, '')                          AS mukim_name
-                FROM public.nd_site            ns
-                LEFT JOIN public.nd_site_profile  nsp  ON nsp.id  = ns.site_profile_id
-                LEFT JOIN public.nd_state         st   ON st.id   = nsp.state_id
-                LEFT JOIN public.organizations    org  ON org.id  = nsp.dusp_tp_id
-                LEFT JOIN public.nd_region        reg  ON reg.id  = nsp.region_id
-                LEFT JOIN public.nd_phases        ph   ON ph.id   = nsp.phase_id
-                LEFT JOIN public.nd_parliaments   parl ON parl.id = nsp.parliament_rfid
-                LEFT JOIN public.nd_duns          dun  ON dun.id  = nsp.dun_rfid
-                LEFT JOIN public.nd_mukims        muk  ON muk.id  = nsp.mukim_id
+                    nsp.refid_mcmc,
+                    COALESCE(nsp.sitename, 'Site-' || nsp.id::text) AS nadi_name,
+                    COALESCE(st.name, '')                            AS state,
+                    COALESCE(org.name, '')                           AS tp,
+                    COALESCE(org.description, '')                    AS dusp,
+                    COALESCE(reg.bm, '')                             AS region_bm,
+                    COALESCE(ph.name, '')                            AS phase_name,
+                    COALESCE(parl.name, '')                          AS parliament_name,
+                    COALESCE(dun.name, '')                           AS dun_name,
+                    COALESCE(muk.name, '')                           AS mukim_name
+                FROM public.nd_site_profile nsp
+                LEFT JOIN public.nd_state       st   ON st.id   = nsp.state_id
+                LEFT JOIN public.organizations  org  ON org.id  = nsp.dusp_tp_id
+                LEFT JOIN public.nd_region      reg  ON reg.id  = nsp.region_id
+                LEFT JOIN public.nd_phases      ph   ON ph.id   = nsp.phase_id
+                LEFT JOIN public.nd_parliaments parl ON parl.id = nsp.parliament_rfid
+                LEFT JOIN public.nd_duns        dun  ON dun.id  = nsp.dun_rfid
+                LEFT JOIN public.nd_mukims      muk  ON muk.id  = nsp.mukim_id
+                WHERE nsp.refid_mcmc IS NOT NULL AND nsp.refid_mcmc <> ''
                 ORDER BY st.name, nsp.sitename
             """)
             df = pd.DataFrame(cur.fetchall())
@@ -506,9 +525,12 @@ def build_nadi_index(
         .set_index("refid_mcmc")
     )
 
+    # Use event site for counting (aligns with nadi_pipeline.py)
+    site_col = "event_site_refid_mcmc" if "event_site_refid_mcmc" in df_pax.columns else "refid_mcmc"
+
     result = []
     for refid, site_row in site_map.iterrows():
-        s = df_pax[df_pax["refid_mcmc"] == refid]
+        s = df_pax[df_pax[site_col] == refid]
 
         programs: dict = {}
         if not s.empty:
@@ -590,11 +612,16 @@ def build_monthly(
     df["_period"] = pd.to_datetime(df["event_startdate"], errors="coerce").dt.to_period("M")
     df_pax = df[df["participant_id"].notna()]
 
+    # Use event site for counting (aligns with nadi_pipeline.py)
+    site_col = "event_site_refid_mcmc" if "event_site_refid_mcmc" in df_pax.columns else "refid_mcmc"
+
     result = []
     for period in sorted(df["_period"].dropna().unique()):
         m = df_pax[df_pax["_period"] == period]
         nadi_map: dict = {}
-        for refid, grp in m.groupby("refid_mcmc"):
+        for refid, grp in m.groupby(site_col):
+            if not refid:
+                continue
             entry: dict = {
                 "events": _safe_int(grp["event_id"].nunique()),
                 "pax":    _safe_int(grp["participant_id"].nunique()),
@@ -642,12 +669,17 @@ def build_weekly(
     df["_week"] = pd.to_datetime(df["event_startdate"], errors="coerce").dt.to_period("W")
     df_pax = df[df["participant_id"].notna()]
 
+    # Use event site for counting (aligns with nadi_pipeline.py)
+    site_col = "event_site_refid_mcmc" if "event_site_refid_mcmc" in df_pax.columns else "refid_mcmc"
+
     result = []
     for week in sorted(df["_week"].dropna().unique()):
         w = df_pax[df_pax["_week"] == week]
         w_start = week.start_time
         nadi_map: dict = {}
-        for refid, grp in w.groupby("refid_mcmc"):
+        for refid, grp in w.groupby(site_col):
+            if not refid:
+                continue
             nadi_map[refid] = {
                 "events": _safe_int(grp["event_id"].nunique()),
                 "pax":    _safe_int(grp["participant_id"].nunique()),
