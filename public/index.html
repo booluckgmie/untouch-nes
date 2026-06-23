@@ -1477,6 +1477,11 @@ function wTab(t){
 /* weekly > by week */
 function rWkByWeek(wk,nd){
   const col=COL[nd.mod]||'#555';
+  const d=window._D;const isLL=d&&d.sub_id===2;
+  const wkThead=isLL
+    ?`<th style="width:26px">#</th><th>NADI site</th><th>State</th><th style="text-align:center;font-size:9px;font-weight:700;color:#4c44b0">NURTURE</th><th style="text-align:center;font-size:9px;font-weight:700;color:#0b7575">SKILLFORGE</th><th style="text-align:center;font-size:9px;font-weight:700;color:#0b7a58">TINYTECHIES</th><th>Ev.</th><th>Zero</th><th>Part.</th><th>Compl.</th>`
+    :`<th style="width:26px">#</th><th>NADI site</th><th>State</th><th>Ev.</th><th>Zero</th><th>Part.</th><th>Compl.</th>`;
+  window._wkIsLL=isLL;
   document.getElementById('wTC').innerHTML=`
     <div class="split">
       <div class="split-l">
@@ -1487,9 +1492,7 @@ function rWkByWeek(wk,nd){
           <select id="wksf" onchange="fWkN()"><option value="">All</option><option value="z">Has zero</option><option value="c">All complete</option></select>
           <span class="fc" id="wkfc"></span>
         </div>
-        <div class="tbl-wrap"><table><thead><tr>
-          <th style="width:26px">#</th><th>NADI site</th><th>State</th><th>Ev.</th><th>Zero</th><th>Part.</th><th>Compl.</th>
-        </tr></thead><tbody id="wkNTb"></tbody></table></div>
+        <div class="tbl-wrap"><table><thead><tr>${wkThead}</tr></thead><tbody id="wkNTb"></tbody></table></div>
       </div>
       <div class="split-r" id="wkPR">
         <div class="ph"><div><h4 id="wkPT"></h4><div class="pref" id="wkPRf"></div></div>
@@ -1500,6 +1503,23 @@ function rWkByWeek(wk,nd){
 }
 function fWkN(){
   const d=window._D;if(!d)return;const wk=d.weekly,col=COL[d.nadi.mod]||'#555';
+  const isLL=window._wkIsLL;
+  // Compute per-pillar ev counts from nadi.ev for LL
+  const nadiPillarMap={};
+  if(isLL){
+    let activeMSet=null;
+    if(selWeek){const wkM=Object.entries(_monthSeq||{}).find(([,ms])=>(ms.wks||[]).includes(selWeek));if(wkM)activeMSet=new Set([wkM[0]]);}
+    else if(selMonth){activeMSet=new Set([selMonth]);}
+    const llPOf=sp=>_LL_PILLARS.find(pl=>pl.subs.includes(sp||''));
+    Object.entries(d.nadi.ev||{}).forEach(([ni,evs])=>{
+      const niRef=(NI[+ni]||[])[0];if(!niRef)return;
+      const fEvs=activeMSet?evs.filter(e=>activeMSet.has(e.m)):evs;
+      if(!fEvs.length)return;
+      const pm={};_LL_PILLARS.forEach(pl=>{pm[pl.n]=0;});
+      fEvs.forEach(e=>{const pl=llPOf(e.sp||'');if(pl)pm[pl.n]++;});
+      nadiPillarMap[niRef]=pm;
+    });
+  }
   let nw;
   if(selWeek){nw=wk.nw[selWeek]||{};}
   else if(selMonth){const mWks=(_monthSeq[selMonth]||{}).wks||[];
@@ -1532,15 +1552,17 @@ function fWkN(){
   const _wZS=document.getElementById('wkKpiZS');if(_wZS)_wZS.textContent=(_wEv?Math.round(_wZ/_wEv*100):0)+'%';
   const _wPS=document.getElementById('wkKpiPS');if(_wPS)_wPS.textContent=(_wEv?Math.round(_wP/_wEv*100):0)+'%';
   const _wCS=document.getElementById('wkKpiCS');if(_wCS)_wCS.textContent=(_wEv?Math.round(_wC/_wEv*100):0)+'%';
-  document.getElementById('wkNTb').innerHTML=rows.map((r,i)=>`
-    <tr onclick="oWkNP('${r.ref}')" id="wkr_${r.ref.replace(/[^a-z0-9]/gi,'_')}">
+  document.getElementById('wkNTb').innerHTML=rows.map((r,i)=>{
+    const pillarCells=isLL?_LL_PILLARS.map(pl=>{const ev=(nadiPillarMap[r.ref]||{})[pl.n]||0;return`<td style="text-align:center;font-size:11px;font-weight:${ev?600:400};color:${ev?pl.c:'var(--t3)'}">${ev||'·'}</td>`;}).join(''):'';
+    return`<tr onclick="oWkNP('${r.ref}')" id="wkr_${r.ref.replace(/[^a-z0-9]/gi,'_')}">
       <td style="color:var(--t3);font-size:10px">${i+1}</td>
       <td><div style="font-weight:600">${ce(r.nm)}</div><div style="font-size:10px;color:var(--t3)">${r.ref}</div></td>
       <td style="font-size:11px;color:var(--t2)">${ce(r.state)}</td>
+      ${pillarCells}
       <td>${r.tot}</td><td>${r.z?`<b style="color:var(--red)">${r.z}</b>`:'—'}</td>
       <td>${r.p?`<span style="color:var(--amber)">${r.p}</span>`:'—'}</td>
       <td>${r.c?`<span style="color:var(--green)">${r.c}</span>`:'—'}</td>
-    </tr>`).join('');
+    </tr>`;}).join('');
 }
 function _mkEvRow(e,col){return`<div class="ev-row">
   <div class="ev-prog" style="color:${col}">${ce(e.pr||'')}</div>
