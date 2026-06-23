@@ -1163,7 +1163,8 @@ function openProgCell(nadi_idx, pi){
     </div>`:'';
   document.getElementById('ptitle').textContent=nm2||ref;
   document.getElementById('pref').textContent=(state||'')+' · '+ref;
-  document.getElementById('ptabs').innerHTML=`<span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:10px;background:${pc}22;color:${pc}">${ce(pname)}</span>`;
+  const _mPl=window._mPillars;const _plName=_mPl&&piToPl[pi]!==undefined?_mPl[piToPl[pi]].name:'';
+  document.getElementById('ptabs').innerHTML=_plName?`<span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:10px;background:${pc}22;color:${pc}">${ce(_plName)}</span><span style="color:var(--t3);margin:0 4px;font-size:12px">›</span><span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:10px;background:${pc}22;color:${pc}">${ce(pname)}</span>`:`<span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:10px;background:${pc}22;color:${pc}">${ce(pname)}</span>`;
   document.getElementById('pb').innerHTML=`
     <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Events by month — ${ce(pname)}</div>
     <table style="width:100%;border-collapse:collapse">
@@ -1557,6 +1558,27 @@ function _mkStatusHtml(allEvs,col){
   if(c.length)h+=`<div class="ev-sec-hdr" style="margin-top:12px;color:var(--green)">✓ COMPLETE (${c.length})</div>${c.map(e=>_mkEvRow(e,col)).join('')}`;
   return h||`<div style="font-size:11px;color:var(--t3);padding:8px">No detailed events recorded.</div>`;
 }
+const _LL_PILLARS=[
+  {n:'NURTURE',    c:'#4c44b0',subs:['CYBERSECURITY','EKELAS','TUISYEN RAKYAT']},
+  {n:'SKILLFORGE', c:'#0b7575',subs:['ESPORT','MAHIR']},
+  {n:'TINYTECHIES',c:'#0b7a58',subs:['TINYTECHIES']},
+];
+function _mkPillarEvHtml(allEvs,col){
+  const totalZ=allEvs.filter(e=>e.st==='z').length;
+  let h=totalZ?`<div class="ut-banner" style="margin-bottom:10px"><div class="ut-banner-t">⚠ ${totalZ} event${totalZ>1?'s':''} with 0 attendance</div><div class="ut-banner-s">SSO must record attendance within 7 days.</div></div>`:'';
+  _LL_PILLARS.forEach(pl=>{
+    const evs=allEvs.filter(e=>pl.subs.includes(e.pr||''));
+    if(!evs.length)return;
+    const z=evs.filter(e=>e.st==='z'),p=evs.filter(e=>e.st==='p'),c=evs.filter(e=>e.st==='c');
+    h+=`<div style="margin-top:8px;padding:6px 8px;border-left:3px solid ${pl.c};background:${pl.c}0d;border-radius:0 6px 6px 0">`;
+    h+=`<div style="font-size:9px;font-weight:700;color:${pl.c};text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${ce(pl.n)}</div>`;
+    if(z.length)h+=`<div class="ev-sec-hdr" style="color:var(--red)">▲ ZERO ATTENDED (${z.length})</div>${z.map(e=>_mkEvRow(e,pl.c)).join('')}`;
+    if(p.length)h+=`<div class="ev-sec-hdr" style="${z.length?'margin-top:8px;':''}color:var(--amber)">⊙ PARTIAL (${p.length})</div>${p.map(e=>_mkEvRow(e,pl.c)).join('')}`;
+    if(c.length)h+=`<div class="ev-sec-hdr" style="${z.length||p.length?'margin-top:8px;':''}color:var(--green)">✓ COMPLETE (${c.length})</div>${c.map(e=>_mkEvRow(e,pl.c)).join('')}`;
+    h+=`</div>`;
+  });
+  return h||`<div style="font-size:11px;color:var(--t3);padding:8px">No detailed events recorded.</div>`;
+}
 function oWkNP(ref){
   const d=window._D;if(!d)return;const col=COL[d.nadi.mod]||'#555';
   const ni=NI.find(n=>n[0]===ref)||[ref,ref,'—'];
@@ -1570,7 +1592,7 @@ function oWkNP(ref){
   if(selWeek){const wkM=Object.entries(_monthSeq||{}).find(([,ms])=>(ms.wks||[]).includes(selWeek));if(wkM)activeMonthSet=new Set([wkM[0]]);}
   else if(selMonth){activeMonthSet=new Set([selMonth]);}
   const allEvs=((d.nadi.ev||{})[niIdx]||[]).filter(e=>!activeMonthSet||activeMonthSet.has(e.m)).map(e=>{const at=e.a??0,tp=e.p??0;return{pn:e.n,pr:e.sp||'',tp,at,st:at===0?'z':at>=tp&&tp>0?'c':'p',sso:''};});
-  document.getElementById('wkPB').innerHTML=_mkStatusHtml(allEvs,col);
+  document.getElementById('wkPB').innerHTML=(d.sub_id===2?_mkPillarEvHtml:_mkStatusHtml)(allEvs,col);
 }
 function cWkP(){document.getElementById('wkPR').className='split-r';document.querySelectorAll('#wkNTb tr').forEach(r=>r.classList.remove('sel'));}
 
@@ -1688,7 +1710,7 @@ function oBnP(ref){
   if(selWeek){const wkM=Object.entries(_monthSeq||{}).find(([,ms])=>(ms.wks||[]).includes(selWeek));if(wkM)activeMonthSet2=new Set([wkM[0]]);}
   else if(selMonth){activeMonthSet2=new Set([selMonth]);}
   const allEvs2=((d.nadi.ev||{})[niIdx]||[]).filter(e=>!activeMonthSet2||activeMonthSet2.has(e.m)).map(e=>{const at=e.a??0,tp=e.p??0;return{pn:e.n,pr:e.sp||'',tp,at,st:at===0?'z':at>=tp&&tp>0?'c':'p',sso:''};});
-  document.getElementById('bnPB').innerHTML=_mkStatusHtml(allEvs2,col);
+  document.getElementById('bnPB').innerHTML=(d.sub_id===2?_mkPillarEvHtml:_mkStatusHtml)(allEvs2,col);
 }
 function cBnP(){document.getElementById('bnPR').className='split-r';document.querySelectorAll('#bnTb tr').forEach(r=>r.classList.remove('sel'));}
 
@@ -1990,9 +2012,10 @@ function openQPanel(ni_idx){
   let progHtml='';
   if(_qEvs.length){
     const _qMapped=_qEvs.map(e=>{const at=e.a??0,tp=e.p??0;return{pn:e.n,pr:e.sp||'',tp,at,st:at===0?'z':at>=tp&&tp>0?'c':'p',sso:''};});
+    const _qFn=window._D&&window._D.sub_id===2?_mkPillarEvHtml:_mkStatusHtml;
     progHtml=`<div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:10px">
     <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Events — ${curQ.label}</div>
-    ${_mkStatusHtml(_qMapped,col)}</div>`;
+    ${_qFn(_qMapped,col)}</div>`;
   }else if(_allEvs.length===0&&totEv>0){progHtml=`<div style="margin-top:10px;font-size:10px;color:var(--t3);font-style:italic">Event details available after next data refresh.</div>`;}
   document.getElementById('ptitle').textContent=nm2||ref;
   document.getElementById('pref').textContent=`${state||''} · ${ref}`;
