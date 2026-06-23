@@ -80,7 +80,7 @@ def _get_event_ids(
               AND jsonb_typeof(e.site_id) = 'array'
               AND e.subcategory_id = {subcategory_id}
               AND e.program_id IS NOT NULL
-              AND e.status_id NOT IN (1, 7, 9)
+              AND e.status_id NOT IN (1, 7, 10)
               {date_filter}
             ORDER BY e.id
         """)
