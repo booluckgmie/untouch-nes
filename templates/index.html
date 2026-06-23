@@ -263,6 +263,10 @@ table.t-mo tfoot td.f-st {position:sticky;left:240px;z-index:3;background:#fafaf
     <select id="gdusp" onchange="applyGlobalFilter()"><option value="">All DUSP</option></select>
     <label>Phase</label>
     <select id="gphase" onchange="applyGlobalFilter()"><option value="">All phases</option></select>
+    <label style="margin-top:5px">State</label>
+    <select id="gstate" onchange="applyGlobalFilter()"><option value="">All states</option></select>
+    <label>Program / Sub-pillar</label>
+    <select id="gprog" onchange="applyGlobalFilter()"><option value="">All programs</option></select>
     <button class="filter-apply" onclick="applyFilter()">Fetch with filter</button>
     <button class="filter-clr" onclick="clearFilter()">Clear all</button>
   </div>
@@ -295,7 +299,7 @@ const fmt=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1).replace(/\.
 const fN=n=>(+n).toLocaleString();
 const ce=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const hc=v=>v===0?'h0':v<=5?'h1':v<=20?'h2':v<=99?'h3':'h4';
-let SUBS={},NI=[],STATES=[],curSub=null,curTab='nadi',tRowsAll=[],selWeek=null,selMonth=null,_monthSeq={},_sd='',_ed='',_nSort={k:'',d:1},_mSort={k:'',d:1},_globalTP='',_globalDUSP='',_globalPhase='',_qSel=null,_qSort={k:'',d:1};
+let SUBS={},NI=[],STATES=[],curSub=null,curTab='nadi',tRowsAll=[],selWeek=null,selMonth=null,_monthSeq={},_sd='',_ed='',_nSort={k:'',d:1},_mSort={k:'',d:1},_globalTP='',_globalDUSP='',_globalPhase='',_globalState='',_globalProg='',_qSel=null,_qSort={k:'',d:1};
 
 function toggleSb(){
   const sb=document.querySelector('.sb'),bd=document.getElementById('sbBd');
@@ -316,7 +320,7 @@ async function boot(){
       window._phaseOpts=[...new Set(NI.map(n=>String(n[6]||'').trim()).filter(Boolean))].sort();
       window._niMap=Object.fromEntries(NI.map(n=>[n[0],n]));
       const _pop=(id,opts)=>{const el=document.getElementById(id);if(!el)return;opts.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;el.appendChild(o);});};
-      _pop('gtp',window._tpOpts);_pop('gdusp',window._duspOpts);_pop('gphase',window._phaseOpts);
+      _pop('gtp',window._tpOpts);_pop('gdusp',window._duspOpts);_pop('gphase',window._phaseOpts);_pop('gstate',STATES);
     }
     if(rS.ok) rS.subcategories.forEach(s=>{SUBS[s.id]=s;});
     buildNav(); gOv(document.getElementById('navOv'));
@@ -361,24 +365,27 @@ function applyGlobalFilter(){
   _globalTP=(document.getElementById('gtp')||{value:''}).value;
   _globalDUSP=(document.getElementById('gdusp')||{value:''}).value;
   _globalPhase=(document.getElementById('gphase')||{value:''}).value;
-  ['gtp','gdusp','gphase'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.toggle('gf-on',!!el.value);});
+  _globalState=(document.getElementById('gstate')||{value:''}).value;
+  _globalProg=(document.getElementById('gprog')||{value:''}).value;
+  ['gtp','gdusp','gphase','gstate','gprog'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.toggle('gf-on',!!el.value);});
   _applyGlobalToRows();
   if(curSub)showTab(curTab||'nadi');
 }
 function _applyGlobalToRows(){
-  // Re-apply global filter to tRowsAll from NI (only call after buildShell built tRowsAll)
   if(!window._tRowsBase)return;
   tRowsAll=window._tRowsBase.filter(r=>{
     if(_globalTP&&r.stp!==_globalTP)return false;
     if(_globalDUSP&&r.sdusp!==_globalDUSP)return false;
     if(_globalPhase&&r.sphase!==_globalPhase)return false;
+    if(_globalState&&r.state!==_globalState)return false;
     return true;
   });
 }
 function clearFilter(){
-  _sd='2026-01-01';_ed='';_globalTP='';_globalDUSP='';_globalPhase='';
+  _sd='2026-01-01';_ed='';_globalTP='';_globalDUSP='';_globalPhase='';_globalState='';_globalProg='';
   const ds=document.getElementById('drS'),de=document.getElementById('drE');
   if(ds)ds.value='2026-01-01';if(de)de.value='';
+  ['gstate','gprog'].forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.classList.remove('gf-on');}});
   ['gtp','gdusp','gphase'].forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.classList.remove('gf-on');}});
   applyFilter();
 }
@@ -666,10 +673,14 @@ function buildShell(id){
     return{i,ref,nm,state,stp,sdusp,sphase,te,tp,pr,ap,tp2:_npl,st:te<_thresh?'u':ap<_npl?'p':'a'};
   });
   window._tRowsBase=_tRowsBase;
-  tRowsAll=(_globalTP||_globalDUSP||_globalPhase)?_tRowsBase.filter(r=>{
+  // Refresh sidebar program dropdown for this subcategory
+  const _gpEl=document.getElementById('gprog');
+  if(_gpEl){const _prev=_gpEl.value;_gpEl.innerHTML='<option value="">All programs</option>';(nd.progs||[]).forEach((p,k)=>{const o=document.createElement('option');o.value=String(k);o.textContent=p;_gpEl.appendChild(o);});_gpEl.value=_prev;_globalProg=_gpEl.value;}
+  tRowsAll=(_globalTP||_globalDUSP||_globalPhase||_globalState)?_tRowsBase.filter(r=>{
     if(_globalTP&&r.stp!==_globalTP)return false;
     if(_globalDUSP&&r.sdusp!==_globalDUSP)return false;
     if(_globalPhase&&r.sphase!==_globalPhase)return false;
+    if(_globalState&&r.state!==_globalState)return false;
     return true;
   }):[..._tRowsBase];
   const _nxr=(f=>{const m=/(\d+)\s+(\w+)\s+(\d+),\s+(\d+):(\d+)/.exec(f||'');if(!m)return'—';const D=new Date(+m[3],{Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11}[m[2]]||0,+m[1],+m[4]+1,+m[5]);return D.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][D.getMonth()]+' '+D.getFullYear()+', '+String(D.getHours()).padStart(2,'0')+':'+String(D.getMinutes()).padStart(2,'0');})(d.fetched);
@@ -719,9 +730,7 @@ function renderNadi(d){
     <div class="content">
       <div class="toolbar">
         <input id="nq" placeholder="Search NADI name or ref ID…" oninput="fN2()">
-        <select id="nst" onchange="fN2()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
         <select id="nsf" onchange="fN2()"><option value="">All status</option><option value="a">Active</option><option value="p">Partial</option><option value="u">Untouched</option></select>
-        <select id="nprog" onchange="fN2()"><option value="">All programs</option>${_progs.map((p,k)=>`<option value="${k}">${ce(p)}</option>`).join('')}</select>
         <button class="dl-btn" onclick="dlN()" title="Export NADI Index to CSV">⬇ Export</button>
         <span class="fc" id="nfc"></span>
       </div>
@@ -736,12 +745,11 @@ function fN2(){
   const nd=d.nadi||{},col=COL[nd.mod]||'#555';
   const _progs=nd.progs||[];
   const q=(document.getElementById('nq')||{value:''}).value.toLowerCase();
-  const st=(document.getElementById('nst')||{value:''}).value;
   const sf=(document.getElementById('nsf')||{value:''}).value;
-  const np=(document.getElementById('nprog')||{value:''}).value;
+  const np=_globalProg;
   const f=tRowsAll.filter(r=>{
     if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
-    if(st&&r.state!==st)return false;if(sf&&r.st!==sf)return false;
+    if(sf&&r.st!==sf)return false;
     if(np&&!r.pr[np])return false;
     return true;
   });
@@ -873,9 +881,7 @@ function renderMonthly(d){
     <div class="content" style="padding-top:0">
       <div class="toolbar">
         <input id="mq" placeholder="Search NADI name or ref…" oninput="fM()">
-        <select id="mst" onchange="fM()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
         <select id="msf" onchange="fM()"><option value="">All NADI</option><option value="a">Active only</option><option value="u">Untouched only</option></select>
-        <select id="mprog" onchange="fM()"><option value="">All programs</option>${progOpts}</select>
         <button class="dl-btn" onclick="dlM()" title="Export monthly data to Excel">⬇ Export</button>
         <span class="fc" id="mfc"></span>
       </div>
@@ -952,9 +958,8 @@ function fM(){
   const PROG_COLORS=window._mProgColors||['#4c44b0','#0b7575','#0b7a58','#a05208','#1650a0'];
 
   const q=(document.getElementById('mq')||{value:''}).value.toLowerCase();
-  const st=(document.getElementById('mst')||{value:''}).value;
   const sf=(document.getElementById('msf')||{value:''}).value;
-  const sp=(document.getElementById('mprog')||{value:''}).value;
+  const sp=_globalProg;
   // Column visibility: hide non-selected program columns
   let _cs=document.getElementById('_prog-col-css');
   if(!_cs){_cs=document.createElement('style');_cs.id='_prog-col-css';document.head.appendChild(_cs);}
@@ -962,7 +967,6 @@ function fM(){
 
   const f=tRowsAll.filter(r=>{
     if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
-    if(st&&r.state!==st)return false;
     if(sf==='a'&&r.st==='u')return false;
     if(sf==='u'&&r.st!=='u')return false;
     return true;
@@ -1786,7 +1790,6 @@ function renderQuarterly(d){
     <div class="content" style="padding-top:0">
       <div class="toolbar">
         <input id="qq" placeholder="Search NADI name or ref…" oninput="fQ()">
-        <select id="qst" onchange="fQ()"><option value="">All states</option>${STATES.map(s=>`<option>${ce(s)}</option>`).join('')}</select>
         <select id="qsf" onchange="fQ()"><option value="">All NADI</option><option value="a">Active only (≥3 ev)</option><option value="u">Untouched only (&lt;3 ev)</option></select>
         <button class="dl-btn" onclick="dlQ()" title="Export quarterly report as CSV">⬇ Export</button>
         <span class="fc" id="qfc"></span>
@@ -1807,11 +1810,9 @@ function fQ(){
   const progs=window._qProgs||[];
   const PROG_COLORS=window._qProgColors||['#4c44b0','#0b7575','#0b7a58','#a05208'];
   const q=(document.getElementById('qq')||{value:''}).value.toLowerCase();
-  const st=(document.getElementById('qst')||{value:''}).value;
   const sf=(document.getElementById('qsf')||{value:''}).value;
   let f=rows.filter(r=>{
     if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
-    if(st&&r.state!==st)return false;
     if(sf==='a'&&r.ut)return false;
     if(sf==='u'&&!r.ut)return false;
     return true;
