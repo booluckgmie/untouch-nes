@@ -818,6 +818,7 @@ function renderMonthly(d){
   window._mCol=col; window._mMH=mH; window._mProgColors=PROG_COLORS;
   window._mDispMonths=dispMonths; window._mMTot=mTot; window._mMaxT=maxT;
   window._mPillars=pillars; window._mDisplayPis=displayPis; window._mPiToPl=piToPl;
+  window._mEvByNI=(window._D&&window._D.nadi&&window._D.nadi.ev)||{};
 
   // Build table headers — 3-level when pillars, 2-level otherwise
   const RS=pillars?3:2;
@@ -829,7 +830,7 @@ function renderMonthly(d){
     }).join('');
     const hProg=displayPis.map(pi=>{
       const pli=piToPl[pi];const pc=PROG_COLORS[pli%PROG_COLORS.length];const pn=progs[pi]||'';
-      return `<th colspan="2" data-pi="${pi}" data-pl="${pli}" style="text-align:center;padding:4px 6px;font-size:8px;font-weight:700;color:${pc};border-left:1px solid var(--line2);white-space:nowrap" title="${ce(pn)}">${ce(pn.length>12?pn.slice(0,11)+'…':pn)}</th>`;
+      return `<th colspan="2" data-pi="${pi}" data-pl="${pli}" onclick="openProgColPanel(${pi})" style="text-align:center;padding:4px 6px;font-size:8px;font-weight:700;color:${pc};border-left:1px solid var(--line2);white-space:nowrap;cursor:pointer" title="Click to view all NADI · ${ce(pn)}">${ce(pn.length>12?pn.slice(0,11)+'…':pn)}</th>`;
     }).join('');
     const hEP=displayPis.map(pi=>{
       const pli=piToPl[pi];
@@ -1117,21 +1118,47 @@ function openProgCell(nadi_idx, pi){
   const d=window._D;if(!d)return;
   const aMap=window._mAMap||{}, months=window._mMonths||[], progs=window._mProgs||[];
   const PROG_COLORS=window._mProgColors||['#4c44b0','#0b7575','#0b7a58','#a05208','#1650a0'];
+  const piToPl=window._mPiToPl||{};
   const mH=window._mMH||(m=>{const[mn,yr]=m.split(' ');return mn+"'"+yr.slice(2);});
   const ni=NI[nadi_idx]||[],[ref,nm2,state]=ni;
   const a=aMap[nadi_idx]||{pr:{}};
   const pr=a.pr[String(pi)]||{ev:[],px:[]};
-  const pc=PROG_COLORS[pi%PROG_COLORS.length];
+  const pli=piToPl[pi]!==undefined?piToPl[pi]:pi;
+  const pc=PROG_COLORS[pli%PROG_COLORS.length];
   const pname=progs[pi]||'Program '+pi;
   const evArr=pr.ev||[], pxArr=pr.px||[];
-  const dispMonths2=_filteredMI?_filteredMI.map(i=>months[i]):months;
-  const dispEv=_filteredMI?_filteredMI.map(i=>evArr[i]||0):evArr;
-  const dispPx=_filteredMI?_filteredMI.map(i=>pxArr[i]||0):pxArr;
+  const activeMI=_filteredMI||months.map((_,k)=>k);
+  const dispMonths2=activeMI.map(i=>months[i]);
+  const dispEv=activeMI.map(i=>evArr[i]||0);
+  const dispPx=activeMI.map(i=>pxArr[i]||0);
   const totEv=dispEv.reduce((s,v)=>s+(v||0),0), totPx=dispPx.reduce((s,v)=>s+(v||0),0);
   const mrows=dispMonths2.map((m,i)=>{
     const ev=dispEv[i]||0, px=dispPx[i]||0;
     return `<tr><td style="font-size:11px;padding:3px 0;color:var(--t3)">${mH(m)}</td><td style="text-align:right;font-size:11px;padding:3px 4px;font-weight:${ev?700:400};color:${ev?pc:'var(--t3)'}">${ev?fN(ev):'—'}</td><td style="text-align:right;font-size:11px;padding:3px 8px;color:var(--t2)">${px?fN(px):'—'}</td></tr>`;
   }).join('');
+  // Raw events list filtered by program and active months
+  const activeMonthSet=new Set(dispMonths2);
+  const rawEvs=((window._mEvByNI||{})[nadi_idx]||[]).filter(e=>{
+    const sp=e.sp||(d.sub_id===2?_llPillar(e.n):e.n);
+    return sp===pname && activeMonthSet.has(e.m);
+  });
+  const rawHtml=rawEvs.length?`
+    <div style="margin-top:14px">
+      <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Raw program names (${rawEvs.length})</div>
+      ${rawEvs.map(e=>{
+        const reg=e.p||0,att=e.a!=null?e.a:null;
+        const attTxt=att!=null?`${fN(att)}/${fN(reg)} att/reg`:`${fN(reg)} reg`;
+        const ratio=att!=null&&reg>0?Math.round(att/reg*100):null;
+        const spTag=e.sp||pname;
+        return `<div style="margin:3px 0;padding:4px 8px;border-left:3px solid ${pc};background:${pc}08;border-radius:0 4px 4px 0">
+          <div style="font-size:10px;color:var(--t1);font-weight:500;line-height:1.4">${ce(e.n)}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
+            <span style="font-size:9px;padding:1px 5px;border-radius:8px;background:${pc}22;color:${pc};font-weight:600">${ce(spTag)}</span>
+            <span style="font-size:9px;color:var(--t2)">${attTxt}${ratio!=null?` · ${ratio}%`:''}</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`:'';
   document.getElementById('ptitle').textContent=nm2||ref;
   document.getElementById('pref').textContent=(state||'')+' · '+ref;
   document.getElementById('ptabs').innerHTML=`<span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:10px;background:${pc}22;color:${pc}">${ce(pname)}</span>`;
@@ -1141,7 +1168,8 @@ function openProgCell(nadi_idx, pi){
       <thead><tr><th style="font-size:9px;color:var(--t3);text-align:left;padding:2px 0;font-weight:400">Month</th><th style="font-size:9px;color:var(--t3);text-align:right;padding:2px 4px;font-weight:400">Events</th><th style="font-size:9px;color:var(--t3);text-align:right;padding:2px 8px;font-weight:400">Pax</th></tr></thead>
       <tbody>${mrows}</tbody>
       <tfoot><tr style="border-top:1px solid var(--line)"><td style="font-size:11px;font-weight:700;padding:5px 0">Total</td><td style="text-align:right;font-size:13px;font-weight:700;padding:5px 4px;color:${pc}">${totEv?fN(totEv):'—'}</td><td style="text-align:right;font-size:11px;padding:5px 8px;color:var(--t2)">${totPx?fN(totPx):'—'}</td></tr></tfoot>
-    </table>`;
+    </table>
+    ${rawHtml}`;
   document.getElementById('panel').classList.add('open');
   document.getElementById('ov2').classList.add('open');
 }
@@ -1182,6 +1210,71 @@ function openPillarCell(nadi_idx,ci){
       </table>
     </div>
     ${col2.pis.length>1?`<div><div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">By program</div><table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left;font-size:9px;color:var(--t3);padding:2px 0;font-weight:400">Program</th><th style="text-align:right;font-size:9px;color:var(--t3);padding:2px 4px;font-weight:400">Events</th><th style="text-align:right;font-size:9px;color:var(--t3);padding:2px 8px;font-weight:400">Pax</th></tr></thead><tbody>${progRows}</tbody></table></div>`:''}`;
+  document.getElementById('panel').classList.add('open');
+  document.getElementById('ov2').classList.add('open');
+}
+
+function openProgColPanel(pi){
+  const d=window._D;if(!d)return;
+  const progs=window._mProgs||[],months=window._mMonths||[];
+  const aMap=window._mAMap||{},evByNI=window._mEvByNI||{};
+  const PROG_COLORS=window._mProgColors||['#4c44b0','#0b7575','#0b7a58','#a05208','#1650a0'];
+  const piToPl=window._mPiToPl||{};
+  const pli=piToPl[pi]!==undefined?piToPl[pi]:pi;
+  const pc=PROG_COLORS[pli%PROG_COLORS.length];
+  const pname=progs[pi]||'Program '+pi;
+  const activeMI=_filteredMI||months.map((_,k)=>k);
+  const activeMonthSet=new Set(activeMI.map(i=>months[i]));
+  const _mkEvRow=e=>{
+    const reg=e.p||0,att=e.a!=null?e.a:null;
+    const attTxt=att!=null?`${fN(att)}/${fN(reg)} att/reg`:`${fN(reg)} reg`;
+    const ratio=att!=null&&reg>0?Math.round(att/reg*100):null;
+    const sp=e.sp||pname;
+    return `<div style="margin:2px 0;padding:3px 8px;border-left:2px solid ${pc}55;background:${pc}06;border-radius:0 3px 3px 0">
+      <div style="font-size:10px;color:var(--t1);line-height:1.4">${ce(e.n)}</div>
+      <div style="display:flex;align-items:center;gap:5px;margin-top:1px">
+        <span style="font-size:8px;padding:1px 4px;border-radius:6px;background:${pc}22;color:${pc};font-weight:600">${ce(sp)}</span>
+        <span style="font-size:9px;color:var(--t2)">${attTxt}${ratio!=null?` · ${ratio}%`:''}</span>
+      </div>
+    </div>`;
+  };
+  const touched=[],untouched=[];
+  (tRowsAll||[]).forEach(r=>{
+    const a=aMap[r.i]||{pr:{}};
+    const pr=a.pr[String(pi)]||{ev:[]};
+    const ev=activeMI.reduce((s,j)=>s+(pr.ev[j]||0),0);
+    const rawEvs=(evByNI[r.i]||[]).filter(e=>{
+      const sp=e.sp||(d.sub_id===2?_llPillar(e.n):e.n);
+      return sp===pname && activeMonthSet.has(e.m);
+    });
+    if(ev>0){touched.push({r,ev,rawEvs});}
+    else{untouched.push(r);}
+  });
+  const touchedHtml=touched.map(({r,ev,rawEvs})=>{
+    const[ref,nm2,state]=NI[r.i]||[];
+    return `<div style="padding:7px 0;border-bottom:1px solid var(--line2)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="font-weight:600;font-size:11px">${ce(nm2||ref)}</span>
+        <span style="font-size:9px;color:var(--t3)">${state||''}</span>
+        <span style="font-size:9px;color:${pc};font-weight:600;margin-left:auto;white-space:nowrap">${fN(ev)} ev</span>
+      </div>
+      ${rawEvs.length?rawEvs.map(_mkEvRow).join(''):`<div style="font-size:10px;color:var(--t3);padding:2px 0">${fN(ev)} event${ev>1?'s':''} — names load after next data refresh</div>`}
+    </div>`;
+  }).join('');
+  const unt=untouched.length;
+  const untHtml=unt?`<div style="margin-top:10px">
+    <div style="font-size:10px;font-weight:600;color:var(--t3);cursor:pointer;padding:6px 0;display:flex;align-items:center;gap:6px" onclick="const n=this.nextElementSibling;const tog=this.querySelector('.pct');if(n.style.display==='none'){n.style.display='block';tog.textContent='▲';}else{n.style.display='none';tog.textContent='▼';}">
+      <span>⬜ ${unt} Untouched NADI</span><span class="pct" style="color:var(--purple)">▼</span>
+    </div>
+    <div style="display:none">${untouched.map(r=>{const[ref,nm2,state]=NI[r.i]||[];return`<div style="font-size:10px;padding:3px 0;border-bottom:1px solid var(--line2);color:var(--t2)">${ce(nm2||ref)} <span style="color:var(--t3)">${state||''} · ${ref}</span></div>`;}).join('')}</div>
+  </div>`:'';
+  document.getElementById('ptitle').textContent=pname;
+  document.getElementById('pref').textContent=`${touched.length} touched · ${unt} untouched`;
+  document.getElementById('ptabs').innerHTML=`<span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:10px;background:${pc}22;color:${pc}">${ce(pname)}</span>`;
+  document.getElementById('pb').innerHTML=`
+    <div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">✓ ${touched.length} Touched NADI</div>
+    <div style="max-height:62vh;overflow-y:auto">${touchedHtml||'<div style="color:var(--t3);font-size:11px;padding:6px 0">No active NADI in this period</div>'}</div>
+    ${untHtml}`;
   document.getElementById('panel').classList.add('open');
   document.getElementById('ov2').classList.add('open');
 }
