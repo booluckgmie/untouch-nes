@@ -1146,7 +1146,7 @@ function openProgCell(nadi_idx, pi){
   });
   const rawHtml=rawEvs.length?`
     <div style="margin-top:14px">
-      <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Raw program names (${rawEvs.length})</div>
+      <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Events (${rawEvs.length})</div>
       ${rawEvs.map(e=>{
         const reg=e.p||0,att=e.a!=null?e.a:null;
         const attTxt=att!=null?`${fN(att)}/${fN(reg)} att/reg`:`${fN(reg)} reg`;
@@ -1558,19 +1558,18 @@ function _mkStatusHtml(allEvs,col){
   return h||`<div style="font-size:11px;color:var(--t3);padding:8px">No detailed events recorded.</div>`;
 }
 function oWkNP(ref){
-  const d=window._D;if(!d)return;const wk=d.weekly,col=COL[d.nadi.mod]||'#555';
+  const d=window._D;if(!d)return;const col=COL[d.nadi.mod]||'#555';
   const ni=NI.find(n=>n[0]===ref)||[ref,ref,'—'];
+  const niIdx=NI.findIndex(n=>n[0]===ref);
   document.querySelectorAll('#wkNTb tr').forEach(r=>r.classList.remove('sel'));
   const el=document.getElementById('wkr_'+ref.replace(/[^a-z0-9]/gi,'_'));if(el)el.classList.add('sel');
   document.getElementById('wkPT').textContent=ni[1];
   document.getElementById('wkPRf').textContent=`${ref} · ${ni[2]}`;
   document.getElementById('wkPR').className='split-r open';
-  const activeWkSet=selWeek?new Set([selWeek]):selMonth?new Set((_monthSeq[selMonth]||{}).wks||[]):null;
-  const allEvs=[];
-  Object.entries(wk.nw).forEach(([wkk,refs])=>{
-    if(activeWkSet&&!activeWkSet.has(wkk))return;
-    (refs[ref]||[]).filter(e=>e.pn).forEach(e=>allEvs.push(e));
-  });
+  let activeMonthSet=null;
+  if(selWeek){const wkM=Object.entries(_monthSeq||{}).find(([,ms])=>(ms.wks||[]).includes(selWeek));if(wkM)activeMonthSet=new Set([wkM[0]]);}
+  else if(selMonth){activeMonthSet=new Set([selMonth]);}
+  const allEvs=((d.nadi.ev||{})[niIdx]||[]).filter(e=>!activeMonthSet||activeMonthSet.has(e.m)).map(e=>{const at=e.a??0,tp=e.p??0;return{pn:e.n,pr:e.sp||'',tp,at,st:at===0?'z':at>=tp&&tp>0?'c':'p',sso:''};});
   document.getElementById('wkPB').innerHTML=_mkStatusHtml(allEvs,col);
 }
 function cWkP(){document.getElementById('wkPR').className='split-r';document.querySelectorAll('#wkNTb tr').forEach(r=>r.classList.remove('sel'));}
@@ -1674,6 +1673,7 @@ function fBnN(){
 function oBnP(ref){
   const d=window._D;if(!d)return;const wk=d.weekly,col=COL[d.nadi.mod]||'#555';
   const ni=NI.find(n=>n[0]===ref)||[ref,ref,'—'];
+  const niIdx=NI.findIndex(n=>n[0]===ref);
   document.querySelectorAll('#bnTb tr').forEach(r=>r.classList.remove('sel'));
   const el=document.getElementById('bnr_'+ref.replace(/[^a-z0-9]/gi,'_'));if(el)el.classList.add('sel');
   document.getElementById('bnPT').textContent=ni[1];document.getElementById('bnPRf').textContent=`${ref} · ${ni[2]}`;
@@ -1684,12 +1684,10 @@ function oBnP(ref){
       ${d.nadi.progs.map(p=>`<div class="ev-row"><div class="ev-meta"><span style="color:var(--t3)">${ce(p)}</span><span class="att-z">0 events</span></div></div>`).join('')}`;
     return;
   }
-  const activeWkSet2=selWeek?new Set([selWeek]):selMonth?new Set((_monthSeq[selMonth]||{}).wks||[]):null;
-  const allEvs2=[];
-  Object.entries(wk.nw).forEach(([wkk,refs])=>{
-    if(activeWkSet2&&!activeWkSet2.has(wkk))return;
-    (refs[ref]||[]).filter(e=>e.pn).forEach(e=>allEvs2.push(e));
-  });
+  let activeMonthSet2=null;
+  if(selWeek){const wkM=Object.entries(_monthSeq||{}).find(([,ms])=>(ms.wks||[]).includes(selWeek));if(wkM)activeMonthSet2=new Set([wkM[0]]);}
+  else if(selMonth){activeMonthSet2=new Set([selMonth]);}
+  const allEvs2=((d.nadi.ev||{})[niIdx]||[]).filter(e=>!activeMonthSet2||activeMonthSet2.has(e.m)).map(e=>{const at=e.a??0,tp=e.p??0;return{pn:e.n,pr:e.sp||'',tp,at,st:at===0?'z':at>=tp&&tp>0?'c':'p',sso:''};});
   document.getElementById('bnPB').innerHTML=_mkStatusHtml(allEvs2,col);
 }
 function cBnP(){document.getElementById('bnPR').className='split-r';document.querySelectorAll('#bnTb tr').forEach(r=>r.classList.remove('sel'));}
@@ -1990,10 +1988,12 @@ function openQPanel(ni_idx){
   const _qMonthSet=new Set(qi.map(j=>months[j]));
   const _qEvs=_allEvs.filter(e=>_qMonthSet.has(e.m));
   let progHtml='';
-  if(_qEvs.length){progHtml=`<div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:10px">
+  if(_qEvs.length){
+    const _qMapped=_qEvs.map(e=>{const at=e.a??0,tp=e.p??0;return{pn:e.n,pr:e.sp||'',tp,at,st:at===0?'z':at>=tp&&tp>0?'c':'p',sso:''};});
+    progHtml=`<div style="margin-top:14px;border-top:1px solid var(--line2);padding-top:10px">
     <div style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Events — ${curQ.label}</div>
-    ${_qEvs.map(e=>`<div class="prow"><div class="pdot2" style="background:${col}"></div><span class="pname">${ce(e.n)}</span><span class="pev" style="font-size:10px;color:var(--t2)">${fN(e.p)} pax</span><span class="ppax">${e.m}</span></div>`).join('')}
-  </div>`;}else if(_allEvs.length===0&&totEv>0){progHtml=`<div style="margin-top:10px;font-size:10px;color:var(--t3);font-style:italic">Event details available after next data refresh.</div>`;}
+    ${_mkStatusHtml(_qMapped,col)}</div>`;
+  }else if(_allEvs.length===0&&totEv>0){progHtml=`<div style="margin-top:10px;font-size:10px;color:var(--t3);font-style:italic">Event details available after next data refresh.</div>`;}
   document.getElementById('ptitle').textContent=nm2||ref;
   document.getElementById('pref').textContent=`${state||''} · ${ref}`;
   document.getElementById('ptabs').innerHTML='';
