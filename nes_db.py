@@ -421,6 +421,19 @@ def apply_sso_remap(df: pd.DataFrame, sub_id: int) -> pd.DataFrame:
     return df
 
 
+def _ll_canonical(pn: str) -> str:
+    """Map raw Lifelong Learning program_name to one of 6 canonical sub-program keys."""
+    p = (pn or "").lower()
+    if "tiny" in p or "techie" in p:                      return "TINYTECHIES"
+    if "esport" in p:                                      return "ESPORT"
+    if "mahir" in p:                                       return "MAHIR"
+    if "tuisyen" in p or "tuition" in p or "guidance" in p: return "TUISYEN RAKYAT"
+    if "ekelas" in p or "e-kelas" in p:                   return "EKELAS"
+    if "cyber" in p or "siber" in p or "security" in p:   return "CYBERSECURITY"
+    if "skillforge" in p or "skill" in p:                 return "ESPORT"
+    return "CYBERSECURITY"
+
+
 def _safe_int(v) -> int:
     """Coerce numpy int64 / NaN / None to a plain Python int safely."""
     try:
@@ -499,16 +512,22 @@ def build_nadi_index(
 
         programs: dict = {}
         if not s.empty:
-            # sub_id 2 (Lifelong Learning): group by specific event program name
-            # to get CYBERSECURITY, EKELAS, TUISYEN RAKYAT, ESPORT, MAHIR, TINYTECHIES
-            _gcol = "program_name" if sub_id == 2 else "program"
-            for prog, grp in s.groupby(_gcol):
-                if not prog:
-                    continue
-                programs[prog] = {
-                    "events": _safe_int(grp["event_id"].nunique()),
-                    "pax":    _safe_int(grp["participant_id"].nunique()),
-                }
+            if sub_id == 2:
+                # Lifelong Learning: group by program_name, canonicalize to 6 sub-programs
+                for prog, grp in s.groupby("program_name"):
+                    canon = _ll_canonical(prog)
+                    if canon not in programs:
+                        programs[canon] = {"events": 0, "pax": 0}
+                    programs[canon]["events"] += _safe_int(grp["event_id"].nunique())
+                    programs[canon]["pax"]    += _safe_int(grp["participant_id"].nunique())
+            else:
+                for prog, grp in s.groupby("program"):
+                    if not prog:
+                        continue
+                    programs[prog] = {
+                        "events": _safe_int(grp["event_id"].nunique()),
+                        "pax":    _safe_int(grp["participant_id"].nunique()),
+                    }
 
         # Compact per-event list: [{n, m, p}] — name, month label, pax count
         ev_list: list = []
@@ -571,10 +590,21 @@ def build_monthly(
         m = df_pax[df_pax["_period"] == period]
         nadi_map: dict = {}
         for refid, grp in m.groupby("refid_mcmc"):
-            nadi_map[refid] = {
+            entry: dict = {
                 "events": _safe_int(grp["event_id"].nunique()),
                 "pax":    _safe_int(grp["participant_id"].nunique()),
             }
+            if sub_id == 2:
+                pr: dict = {}
+                for prog, pgrp in grp.groupby("program_name"):
+                    canon = _ll_canonical(prog)
+                    if canon not in pr:
+                        pr[canon] = {"events": 0, "pax": 0}
+                    pr[canon]["events"] += _safe_int(pgrp["event_id"].nunique())
+                    pr[canon]["pax"]    += _safe_int(pgrp["participant_id"].nunique())
+                if pr:
+                    entry["pr"] = pr
+            nadi_map[refid] = entry
         result.append({
             "period": str(period),                     # "2026-01"
             "label":  period.strftime("%b %Y"),         # "Jan 2026"
