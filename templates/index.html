@@ -816,13 +816,18 @@ function renderMonthly(d){
   window._mPillars=pillars; window._mDisplayPis=displayPis; window._mPiToPl=piToPl;
   window._mEvByNI=(window._D&&window._D.nadi&&window._D.nadi.ev)||{};
 
-  // Build table headers — 3-level when pillars, 2-level otherwise
-  const RS=pillars?3:2;
+  // Build table headers — 4-level when pillars, 2-level otherwise
+  const RS=pillars?4:2;
   let theadInner;
   if(pillars){
     const hPillar=pillars.map((pl,pli)=>{
       const pc=PROG_COLORS[pli%PROG_COLORS.length];
-      return `<th colspan="${pl.pis.length*2}" data-pl="${pli}" style="text-align:center;padding:4px 6px;font-size:9px;font-weight:700;color:${pc};border-left:1px solid var(--line2)">${ce(pl.name)}${pl.info?`<div style="font-size:7px;font-weight:400;color:var(--t3);margin-top:1px;white-space:normal">${ce(pl.info)}</div>`:''}</th>`;
+      return `<th colspan="${pl.pis.length*2}" data-pl="${pli}" style="text-align:center;padding:4px 6px;font-size:9px;font-weight:700;color:${pc};border-left:1px solid var(--line2)">${ce(pl.name)}</th>`;
+    }).join('');
+    const hSubProg=pillars.map((pl,pli)=>{
+      const pc=PROG_COLORS[pli%PROG_COLORS.length];
+      const sub=pl.pis.map(pi=>progs[pi]||'').join(' · ');
+      return `<th colspan="${pl.pis.length*2}" data-pl="${pli}" style="text-align:center;padding:2px 5px;font-size:7px;font-weight:400;color:${pc};opacity:.75;border-left:1px solid var(--line2);white-space:normal">${ce(sub)}</th>`;
     }).join('');
     const hProg=displayPis.map(pi=>{
       const pli=piToPl[pi];const pc=PROG_COLORS[pli%PROG_COLORS.length];const pn=progs[pi]||'';
@@ -833,12 +838,12 @@ function renderMonthly(d){
       return `<th data-pi="${pi}" data-pl="${pli}" style="text-align:center;padding:2px 5px;font-size:8px;color:var(--t3);border-left:1px solid var(--line2)">Ev</th><th data-pi="${pi}" data-pl="${pli}" style="text-align:center;padding:2px 5px;font-size:8px;color:var(--t3)">Pax</th>`;
     }).join('');
     theadInner=`<tr>
-      <th class="f-ref" rowspan="3" style="vertical-align:bottom">Ref ID</th>
-      <th id="mhNm" class="f-nm" rowspan="3" style="vertical-align:bottom;cursor:pointer;user-select:none" onclick="mSort('nm')">NADI site</th>
-      <th id="mhState" class="f-st" rowspan="3" style="vertical-align:bottom;cursor:pointer;user-select:none" onclick="mSort('state')">State</th>
+      <th class="f-ref" rowspan="4" style="vertical-align:bottom">Ref ID</th>
+      <th id="mhNm" class="f-nm" rowspan="4" style="vertical-align:bottom;cursor:pointer;user-select:none" onclick="mSort('nm')">NADI site</th>
+      <th id="mhState" class="f-st" rowspan="4" style="vertical-align:bottom;cursor:pointer;user-select:none" onclick="mSort('state')">State</th>
       ${hPillar}
-      <th colspan="2" rowspan="3" style="text-align:center;padding:5px 6px;font-size:10px;font-weight:700;border-left:2px solid var(--line);white-space:nowrap;vertical-align:middle"><span id="mhTe" style="cursor:pointer;user-select:none" onclick="mSort('te')">Total Ev</span><br><span id="mhTp" style="cursor:pointer;user-select:none" onclick="mSort('tp')">Pax</span></th>
-    </tr><tr>${hProg}</tr><tr>${hEP}</tr>`;
+      <th colspan="2" rowspan="4" style="text-align:center;padding:5px 6px;font-size:10px;font-weight:700;border-left:2px solid var(--line);white-space:nowrap;vertical-align:middle"><span id="mhTe" style="cursor:pointer;user-select:none" onclick="mSort('te')">Total Ev</span><br><span id="mhTp" style="cursor:pointer;user-select:none" onclick="mSort('tp')">Pax</span></th>
+    </tr><tr>${hSubProg}</tr><tr>${hProg}</tr><tr>${hEP}</tr>`;
   } else {
     const hdr1=displayPis.map(pi=>{
       const pc=PROG_COLORS[pi%PROG_COLORS.length];const pn=progs[pi]||'';
@@ -1916,11 +1921,11 @@ function renderQuarterly(d){
     }).join('');
     const hProg=displayPis.map(pi=>{
       const pli=piToPl[pi];const pc=PROG_COLORS[pli%PROG_COLORS.length];const pn=progs[pi]||'';
-      return `<th colspan="2" style="text-align:center;padding:3px 5px;font-size:8px;font-weight:700;color:${pc};border-left:1px solid var(--line2);white-space:nowrap" title="${ce(pn)}">${ce(pn.length>11?pn.slice(0,10)+'…':pn)}</th>`;
+      const tpn=ce(pn.length>11?pn.slice(0,10)+'…':pn);
+      return `<th style="text-align:center;padding:3px 5px;font-size:8px;font-weight:700;color:${pc};border-left:1px solid var(--line2);white-space:nowrap" title="${ce(pn)}">${tpn}</th><th style="text-align:center;padding:3px 5px;font-size:8px;font-weight:700;color:${pc};white-space:nowrap" title="${ce(pn)}">${tpn}</th>`;
     }).join('');
-    const hEP=displayPis.map(pi=>{
-      const pli=piToPl[pi];
-      return `<th style="text-align:center;padding:2px 3px;font-size:8px;color:var(--t3);border-left:1px solid var(--line2)">Ev</th><th style="text-align:center;padding:2px 3px;font-size:8px;color:var(--t3)">Px</th>`;
+    const hEP=displayPis.map(()=>{
+      return `<th style="text-align:center;padding:2px 3px;font-size:7px;color:var(--t3);border-left:1px solid var(--line2)">Sum of<br>events</th><th style="text-align:center;padding:2px 3px;font-size:7px;color:var(--t3)">Sum of<br>pax</th>`;
     }).join('');
     theadHtml=`<tr>
       <th rowspan="3" style="width:28px">#</th>
