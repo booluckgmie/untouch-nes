@@ -1533,7 +1533,24 @@ function fWkN(){
   const d=window._D;if(!d)return;const wk=d.weekly,col=COL[d.nadi.mod]||'#555';
   const isLL=window._wkIsLL;
   const _gpName=_globalProg?(d.nadi.progs||[])[parseInt(_globalProg)]||'':'';
-  const _gpFilter=_gpName?isLL?(e=>_llPillar(e.pr||'',e.sp||'')===_gpName):(e=>e.pr===_gpName):null;
+  // wk.nw events are synthetic ({pr:'',pn:''}) — program data must come from d.nadi.ev
+  // For non-LL only: apply per-event program filter on wk.nw
+  const _gpFilter=_gpName&&!isLL?(e=>e.pr===_gpName):null;
+  // Build per-program ev/pax map from d.nadi.ev (corrected sp) for LL
+  const nadiProgMap={};
+  if(isLL){
+    let activeMSet=null;
+    if(selWeek){const wkM=Object.entries(_monthSeq||{}).find(([,ms])=>(ms.wks||[]).includes(selWeek));if(wkM)activeMSet=new Set([wkM[0]]);}
+    else if(selMonth){activeMSet=new Set([selMonth]);}
+    Object.entries(d.nadi.ev||{}).forEach(([ni,evs])=>{
+      const niRef=(NI[+ni]||[])[0];if(!niRef)return;
+      let fEvs=activeMSet?evs.filter(e=>activeMSet.has(e.m)):evs;
+      if(_gpName)fEvs=fEvs.filter(e=>e.sp===_gpName);
+      if(!fEvs.length)return;
+      const pm={};fEvs.forEach(e=>{const sp=e.sp||'';if(!pm[sp])pm[sp]={ev:0,pax:0};pm[sp].ev++;pm[sp].pax+=e.a||0;});
+      nadiProgMap[niRef]=pm;
+    });
+  }
   let nw;
   if(selWeek){nw=wk.nw[selWeek]||{};}
   else if(selMonth){const mWks=(_monthSeq[selMonth]||{}).wks||[];
@@ -1547,13 +1564,13 @@ function fWkN(){
   const _wkAllow=_globalTP||_globalDUSP||_globalPhase||_globalState||_globalProg?new Set(tRowsAll.map(r=>r.ref)):null;
   let rows=Object.entries(nw).map(([ref,evs])=>{
     if(_wkAllow&&!_wkAllow.has(ref))return null;
-    const fevs=(pr||_gpFilter)?evs.filter(e=>{if(pr&&e.pr!==pr)return false;if(_gpFilter&&!_gpFilter(e))return false;return true;}):evs;
+    // For LL: wk.nw events have no program info; sidebar program filter via _wkAllow
+    const fevs=_gpFilter?evs.filter(e=>_gpFilter(e)):pr?evs.filter(e=>e.pr===pr):evs;
     if((pr||_gpFilter)&&!fevs.length)return null;
     const ni=NI.find(n=>n[0]===ref)||[ref,ref,'—','',''];
     const z=fevs.filter(e=>e.st==='z').length,c=fevs.filter(e=>e.st==='c').length,p=fevs.filter(e=>e.st==='p').length;
     const pax=fevs.reduce((s,e)=>s+(e.at||0),0);
-    const progMap={};if(isLL)fevs.forEach(e=>{const g=_llPillar(e.pr||'',e.sp||'');if(!progMap[g])progMap[g]={ev:0,pax:0};progMap[g].ev++;progMap[g].pax+=e.at||0;});
-    return{ref,nm:ni[1],state:ni[2],stp:String(ni[3]||'').trim(),sdusp:String(ni[4]||'').trim(),sphase:String(ni[6]||'').trim(),evs:fevs,z,c,p,tot:fevs.length,pax,progMap};
+    return{ref,nm:ni[1],state:ni[2],stp:String(ni[3]||'').trim(),sdusp:String(ni[4]||'').trim(),sphase:String(ni[6]||'').trim(),evs:fevs,z,c,p,tot:fevs.length,pax};
   }).filter(r=>{
     if(!r)return false;
     if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
@@ -1569,7 +1586,7 @@ function fWkN(){
   const _wCS=document.getElementById('wkKpiCS');if(_wCS)_wCS.textContent=(_wEv?Math.round(_wC/_wEv*100):0)+'%';
   const _apWk=isLL?_LL_PILLARS.flatMap(pl=>pl.subs.map((s,si)=>({name:s,color:pl.c,isFirst:si===0}))):[];
   document.getElementById('wkNTb').innerHTML=rows.map((r,i)=>{
-    const pillarCells=isLL?_apWk.map(({name,color,isFirst})=>{const pm=r.progMap[name]||{ev:0,pax:0};const bl=isFirst?'border-left:1px solid var(--line2)':'';return`<td style="text-align:center;font-size:11px;font-weight:${pm.ev?600:400};color:${pm.ev?color:'var(--t3)'};${bl}">${pm.ev||'·'}</td><td style="text-align:center;font-size:10px;color:${pm.pax?'var(--t2)':'var(--t3)'}">${pm.pax||'·'}</td>`;}).join(''):'';
+    const pillarCells=isLL?_apWk.map(({name,color,isFirst})=>{const pm=(nadiProgMap[r.ref]||{})[name]||{ev:0,pax:0};const bl=isFirst?'border-left:1px solid var(--line2)':'';return`<td style="text-align:center;font-size:11px;font-weight:${pm.ev?600:400};color:${pm.ev?color:'var(--t3)'};${bl}">${pm.ev||'·'}</td><td style="text-align:center;font-size:10px;color:${pm.pax?'var(--t2)':'var(--t3)'}">${pm.pax||'·'}</td>`;}).join(''):'';
     return`<tr onclick="oWkNP('${r.ref}')" id="wkr_${r.ref.replace(/[^a-z0-9]/gi,'_')}">
       <td style="color:var(--t3);font-size:10px">${i+1}</td>
       <td><div style="font-weight:600">${ce(r.nm)}</div><div style="font-size:10px;color:var(--t3)">${r.ref}</div></td>
@@ -1683,7 +1700,24 @@ function fBnN(){
   // All sidebar filters applied to tRowsAll; use allowset for weekly
   const _bnGAllow=_globalTP||_globalDUSP||_globalPhase||_globalState||_globalProg?new Set(tRowsAll.map(r=>r.ref)):null;
   const _bnGpName=_globalProg?(d.nadi.progs||[])[parseInt(_globalProg)]||'':'';
-  const _bnGpFilter=_bnGpName?isLL?(e=>_llPillar(e.pr||'',e.sp||'')===_bnGpName):(e=>e.pr===_bnGpName):null;
+  // wk.nw events are synthetic ({pr:'',pn:''}) — for LL use _bnGAllow for program scope
+  const _bnGpFilter=_bnGpName&&!isLL?(e=>e.pr===_bnGpName):null;
+  // Build per-program ev/pax map from d.nadi.ev (corrected sp) for LL
+  const nadiProgMap={};
+  if(isLL){
+    let activeMSet=null;
+    if(selWeek){const wkM=Object.entries(_monthSeq||{}).find(([,ms])=>(ms.wks||[]).includes(selWeek));if(wkM)activeMSet=new Set([wkM[0]]);}
+    else if(selMonth){activeMSet=new Set([selMonth]);}
+    Object.entries(d.nadi.ev||{}).forEach(([ni,evs])=>{
+      const niRef=(NI[+ni]||[])[0];if(!niRef)return;
+      if(_bnGAllow&&!_bnGAllow.has(niRef))return;
+      let fEvs=activeMSet?evs.filter(e=>activeMSet.has(e.m)):evs;
+      if(_bnGpName)fEvs=fEvs.filter(e=>e.sp===_bnGpName);
+      if(!fEvs.length)return;
+      const pm={};fEvs.forEach(e=>{const sp=e.sp||'';if(!pm[sp])pm[sp]={ev:0,pax:0};pm[sp].ev++;pm[sp].pax+=e.a||0;});
+      nadiProgMap[niRef]=pm;
+    });
+  }
   // Rebuild nadiMap fresh — so program filter correctly recounts zeros/completes
   const nadiMap={};
   const _bnAllow=selWeek?new Set([selWeek]):selMonth?new Set((_monthSeq[selMonth]||{}).wks||[]):null;
@@ -1691,16 +1725,15 @@ function fBnN(){
     if(_bnAllow&&!_bnAllow.has(wkk))return;
     Object.entries(refs).forEach(([ref,evs])=>{
       if(_bnGAllow&&!_bnGAllow.has(ref))return;
-      const fevs=(pr||_bnGpFilter)?evs.filter(e=>{if(pr&&e.pr!==pr)return false;if(_bnGpFilter&&!_bnGpFilter(e))return false;return true;}):evs;
+      const fevs=_bnGpFilter?evs.filter(e=>_bnGpFilter(e)):pr?evs.filter(e=>e.pr===pr):evs;
       if(!fevs.length)return;
-      if(!nadiMap[ref])nadiMap[ref]={z:0,c:0,p:0,tot:0,pax:0,wks:new Set(),progs:{}};
+      if(!nadiMap[ref])nadiMap[ref]={z:0,c:0,p:0,tot:0,pax:0,wks:new Set()};
       nadiMap[ref].z+=fevs.filter(e=>e.st==='z').length;
       nadiMap[ref].c+=fevs.filter(e=>e.st==='c').length;
       nadiMap[ref].p+=fevs.filter(e=>e.st==='p').length;
       nadiMap[ref].tot+=fevs.length;
       nadiMap[ref].pax+=fevs.reduce((s,e)=>s+(e.at||0),0);
       nadiMap[ref].wks.add(wkk);
-      if(isLL)fevs.forEach(e=>{const g=_llPillar(e.pr||'',e.sp||'');if(!nadiMap[ref].progs[g])nadiMap[ref].progs[g]={ev:0,pax:0};nadiMap[ref].progs[g].ev++;nadiMap[ref].progs[g].pax+=e.at||0;});
     });
   });
 
@@ -1708,7 +1741,7 @@ function fBnN(){
   const allRows=_bnBase.map(n=>{
     const ref=n[0],nm=n[1],state=n[2],stp=String(n[3]||'').trim(),sdusp=String(n[4]||'').trim();
     const m=nadiMap[ref];
-    return{ref,nm,state,stp,sdusp,z:m?m.z:0,c:m?m.c:0,p:m?m.p:0,tot:m?m.tot:0,pax:m?m.pax:0,wks:m?m.wks.size:0,ut:!m,progs:m?m.progs:{}};
+    return{ref,nm,state,stp,sdusp,z:m?m.z:0,c:m?m.c:0,p:m?m.p:0,tot:m?m.tot:0,pax:m?m.pax:0,wks:m?m.wks.size:0,ut:!m};
   });
 
   const f=allRows.filter(r=>{
@@ -1729,7 +1762,7 @@ function fBnN(){
   const _bCS=document.getElementById('wkKpiCS');if(_bCS)_bCS.textContent=(_bEv?Math.round(_bC/_bEv*100):0)+'%';
   const _apBn=isLL?_LL_PILLARS.flatMap(pl=>pl.subs.map((s,si)=>({name:s,color:pl.c,isFirst:si===0}))):[];
   document.getElementById('bnTb').innerHTML=f.map((r,i)=>{
-    const pillarCells=isLL?_apBn.map(({name,color,isFirst})=>{const pm=(r.progs||{})[name]||{ev:0,pax:0};const bl=isFirst?'border-left:1px solid var(--line2)':'';return`<td style="text-align:center;font-size:11px;font-weight:${pm.ev?600:400};color:${pm.ev?color:'var(--t3)'};${bl}">${pm.ev||'·'}</td><td style="text-align:center;font-size:10px;color:${pm.pax?'var(--t2)':'var(--t3)'}">${pm.pax||'·'}</td>`;}).join(''):`<td style="color:var(--t2)">${r.wks||'—'}</td>`;
+    const pillarCells=isLL?_apBn.map(({name,color,isFirst})=>{const pm=(nadiProgMap[r.ref]||{})[name]||{ev:0,pax:0};const bl=isFirst?'border-left:1px solid var(--line2)':'';return`<td style="text-align:center;font-size:11px;font-weight:${pm.ev?600:400};color:${pm.ev?color:'var(--t3)'};${bl}">${pm.ev||'·'}</td><td style="text-align:center;font-size:10px;color:${pm.pax?'var(--t2)':'var(--t3)'}">${pm.pax||'·'}</td>`;}).join(''):`<td style="color:var(--t2)">${r.wks||'—'}</td>`;
     return`<tr onclick="oBnP('${r.ref}')" id="bnr_${r.ref.replace(/[^a-z0-9]/gi,'_')}">
       <td style="color:var(--t3);font-size:10px">${i+1}</td>
       <td><div style="font-weight:${r.ut?400:600};color:${r.ut?'var(--t3)':'var(--t1)'}">${ce(r.nm)}</div><div style="font-size:10px;color:var(--t3)">${r.ref}</div></td>
