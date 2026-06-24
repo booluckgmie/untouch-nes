@@ -775,8 +775,11 @@ function fN2(){
   window._filteredNRows=f;
   if(_nSort.k){const k=_nSort.k,d=_nSort.d;f.sort((a,b)=>{const av=a[k],bv=b[k];return(typeof av==='number'?av-bv:String(av||'').localeCompare(String(bv||'')))*d;});}
   document.getElementById('nfc').textContent=fN(f.length)+' sites';
-  const _fEv=f.reduce((s,r)=>s+r.te,0),_fPx=f.reduce((s,r)=>s+r.tp,0);
-  const _fAc=f.filter(r=>r.te>0).length,_fUn=f.filter(r=>r.te===0).length;
+  // When program filter active, show that program's events/pax per row instead of all-program total
+  const _rte=r=>{if(!np)return r.te;const v=r.pr[np];return v&&Array.isArray(v)?v[0]:0;};
+  const _rtp=r=>{if(!np)return r.tp;const v=r.pr[np];return v&&Array.isArray(v)?v[1]:0;};
+  const _fEv=f.reduce((s,r)=>s+_rte(r),0),_fPx=f.reduce((s,r)=>s+_rtp(r),0);
+  const _fAc=f.filter(r=>_rte(r)>0).length,_fUn=f.filter(r=>_rte(r)===0).length;
   const _kE=document.getElementById('nkpiE');if(_kE)_kE.textContent=fN(_fEv);
   const _kP=document.getElementById('nkpiP');if(_kP)_kP.textContent=fN(_fPx);
   const _kA=document.getElementById('nkpiA');if(_kA)_kA.textContent=String(_fAc);
@@ -786,14 +789,15 @@ function fN2(){
   const _NH={nm:'NADI site',state:'State',st:'Status',te:'Events',tp:'Pax'};
   Object.entries({nm:'nhNm',state:'nhState',st:'nhSt',te:'nhTe',tp:'nhTp'}).forEach(([k,id])=>{const el=document.getElementById(id);if(el)el.textContent=_NH[k]+(_nSort.k===k?(_nSort.d>0?' ↑':' ↓'):'');});
   document.getElementById('nTb').innerHTML=f.map((r,i)=>{
+    const rte=_rte(r),rtp=_rtp(r);
     const sp=r.st==='u'?`<span class="pill p-r">untouched</span>`:r.st==='p'?`<span class="pill p-y">${r.ap}/${r.tp2}</span>`:`<span class="pill p-g">active</span>`;
     const dots=_progs.map((_,k)=>`<div class="pdot" style="background:${r.pr[String(k)]?col:'var(--line)'}"></div>`).join('');
     return `<tr onclick="openPanel(${r.i})" id="ri${r.i}">
       <td style="color:var(--t3);font-size:10px">${i+1}</td>
-      <td><div style="font-weight:${r.te?600:400};color:${r.te?'var(--t1)':'var(--t3)'}">${ce(r.nm)}</div><div style="font-size:10px;color:var(--t3)">${r.ref}</div></td>
+      <td><div style="font-weight:${rte?600:400};color:${rte?'var(--t1)':'var(--t3)'}">${ce(r.nm)}</div><div style="font-size:10px;color:var(--t3)">${r.ref}</div></td>
       <td style="font-size:11px;color:var(--t2)">${ce(r.state)}</td><td>${sp}</td>
-      <td style="font-weight:${r.te?600:400}">${r.te?fN(r.te):'—'}</td>
-      <td style="color:var(--t2)">${r.tp?fN(r.tp):'—'}</td>
+      <td style="font-weight:${rte?600:400}">${rte?fN(rte):'—'}</td>
+      <td style="color:var(--t2)">${rtp?fN(rtp):'—'}</td>
       <td><div class="pdots">${dots}</div></td></tr>`;
   }).join('');
 }
