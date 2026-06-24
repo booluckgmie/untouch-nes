@@ -841,10 +841,13 @@ function renderMonthly(d){
       const pc=PROG_COLORS[pli%PROG_COLORS.length];
       return `<th colspan="${pl.pis.length*2}" data-pl="${pli}" style="text-align:center;padding:4px 6px;font-size:9px;font-weight:700;color:${pc};border-left:1px solid var(--line2)">${ce(pl.name)}</th>`;
     }).join('');
-    const hSubProg=pillars.map((pl,pli)=>{
+    const hSubProg=pillars.flatMap((pl,pli)=>{
       const pc=PROG_COLORS[pli%PROG_COLORS.length];
-      const sub=pl.pis.map(pi=>progs[pi]||'').join(' · ');
-      return `<th colspan="${pl.pis.length*2}" data-pl="${pli}" style="text-align:center;padding:2px 5px;font-size:7px;font-weight:400;color:${pc};opacity:.75;border-left:1px solid var(--line2);white-space:normal">${ce(sub)}</th>`;
+      return pl.pis.map((pi,k)=>{
+        const pn=progs[pi]||'';
+        const bl=k===0?'border-left:1px solid var(--line2)':'border-left:1px dashed var(--line2)';
+        return `<th colspan="2" data-pi="${pi}" data-pl="${pli}" onclick="openProgColPanel(${pi})" style="text-align:center;padding:2px 5px;font-size:7px;font-weight:600;color:${pc};${bl};white-space:nowrap;cursor:pointer" title="${ce(pn)}">${ce(pn.length>13?pn.slice(0,12)+'…':pn)}</th>`;
+      });
     }).join('');
     const hCombined=displayPis.map(pi=>{
       const pli=piToPl[pi];
