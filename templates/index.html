@@ -551,7 +551,7 @@ async function gSub(id,btn){
 }
 
 // Canonical LL sub-program classifier — uses session name; specific keywords before generic 'skill'
-function _llPillar(pn){const p=(pn||'').toLowerCase();if(p.includes('ekelas')||p.includes('e-kelas'))return'EKELAS';if(p.includes('tuisyen')||p.includes('tuition')||p.includes('guidance'))return'TUISYEN RAKYAT';if(p.includes('mahir'))return'MAHIR';if(p.includes('esport')||p.includes('e-sukan')||p.includes('esukan'))return'ESPORT';if(p.includes('skillforge')||p.includes('skill'))return'ESPORT';if(p.includes('cyber')||p.includes('siber')||p.includes('security'))return'CYBERSECURITY';if(p.includes('tiny')||p.includes('techie'))return'TINYTECHIES';return'CYBERSECURITY';}
+function _llPillar(pn,fb){const p=(pn||'').toLowerCase();if(p.includes('ekelas')||p.includes('e-kelas'))return'EKELAS';if(p.includes('tuisyen')||p.includes('tuition')||p.includes('guidance'))return'TUISYEN RAKYAT';if(p.includes('mahir'))return'MAHIR';if(p.includes('esport')||p.includes('e-sukan')||p.includes('esukan'))return'ESPORT';const CANON=['CYBERSECURITY','EKELAS','TUISYEN RAKYAT','ESPORT','MAHIR','TINYTECHIES'];if(fb&&CANON.includes(fb))return fb;if(p.includes('skillforge')||p.includes('skill'))return'ESPORT';if(p.includes('cyber')||p.includes('siber')||p.includes('security'))return'CYBERSECURITY';if(p.includes('tiny')||p.includes('techie'))return'TINYTECHIES';return'CYBERSECURITY';}
 
 function normalizeSubData(raw,id){
   if(!Array.isArray(raw.nadi))return raw; // already dict format
@@ -565,7 +565,7 @@ function normalizeSubData(raw,id){
     raw.nadi.forEach(n=>{
       const pm={},mpm={};
       (n.ev||[]).forEach(e=>{
-        e.sp=_llPillar(e.n||'');
+        e.sp=_llPillar(e.n||'',e.sp||'');
         const sp=e.sp,ml=e.m||'';
         if(!pm[sp])pm[sp]={events:0,pax:0};
         pm[sp].events++;pm[sp].pax+=(e.a||0);
