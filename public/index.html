@@ -1020,8 +1020,6 @@ function fM(){
       return(typeof av==='number'?av-bv:String(av||'').localeCompare(String(bv||'')))*d2;
     });
   }
-  document.getElementById('mfc').textContent=fN(f.length)+' sites';
-  window._filteredRows=f;
   // Update sort indicators in Monthly Update headers
   const _MH={nm:'NADI site',state:'State'};
   ['nm','state'].forEach(k=>{const el=document.getElementById('mh'+k.charAt(0).toUpperCase()+k.slice(1));if(el)el.textContent=_MH[k]+(_mSort.k===k?(_mSort.d>0?' ↑':' ↓'):'');});
@@ -1042,6 +1040,8 @@ function fM(){
     return dataMonthIdx!==null?(ev[dataMonthIdx]||0)>0:(mi?mi.some(j=>(ev[j]||0)>0):ev.some(v=>v>0));
   };
   const fF=f.filter(_spFilter);
+  window._filteredRows=fF;
+  document.getElementById('mfc').textContent=fN(fF.length)+' sites';
 
   document.getElementById('mTb').innerHTML=fF.map(r=>{
     const a=aMap[r.i]||{tot:[],pax:[],pr:{}};
@@ -2044,6 +2044,7 @@ function fQ(){
     return true;
   });
   if(_qSort.k){const k=_qSort.k,dv=_qSort.d;f.sort((a,b)=>{const av=a[k],bv=b[k];return(typeof av==='number'?av-bv:String(av||'').localeCompare(String(bv||'')))*dv;});}
+  window._qFilteredRows=f;
   const _NH={nm:'NADI site',state:'State',qEv:'Total Ev',qPx:'Pax'};
   Object.entries({nm:'qhNm',state:'qhState',qEv:'qhEv',qPx:'qhPx'}).forEach(([k,id])=>{const el=document.getElementById(id);if(el)el.textContent=_NH[k]+(_qSort.k===k?(_qSort.d>0?' ↑':' ↓'):'');});
   const utN=f.filter(r=>r.ut).length;
@@ -2131,8 +2132,11 @@ function dlCSV(rows,filename){
 }
 function dlN(){
   const f=window._filteredNRows||tRowsAll;
+  const np=_globalProg;
+  const _rte=r=>{if(!np)return r.te;const v=r.pr[np];return v&&Array.isArray(v)?v[0]:0;};
+  const _rtp=r=>{if(!np)return r.tp;const v=r.pr[np];return v&&Array.isArray(v)?v[1]:0;};
   const rows=[['#','Ref ID','NADI Site','State','TP','DUSP','Phase','Events','Pax','Status']];
-  f.forEach((r,i)=>rows.push([i+1,r.ref,r.nm,r.state,r.stp,r.sdusp,r.sphase||'',r.te,r.tp,r.st==='u'?'Untouched':r.st==='p'?'Partial':'Active']));
+  f.forEach((r,i)=>rows.push([i+1,r.ref,r.nm,r.state,r.stp,r.sdusp,r.sphase||'',_rte(r),_rtp(r),r.st==='u'?'Untouched':r.st==='p'?'Partial':'Active']));
   dlCSV(rows,'nadi_index_'+new Date().toISOString().slice(0,10)+'.csv');
 }
 function dlM(){
@@ -2165,7 +2169,7 @@ function dlM(){
   XLSX.writeFile(wb,'monthly_update_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
 function dlQ(){
-  const f=window._qRows||[];const curQ=window._qCurQ||{label:'Q'};
+  const f=window._qFilteredRows||window._qRows||[];const curQ=window._qCurQ||{label:'Q'};
   const rows=[['#','Ref ID','NADI Site','State','TP','DUSP','Phase','Events','Pax','Status']];
   f.forEach((r,i)=>rows.push([i+1,r.ref,r.nm,r.state,r.stp,r.sdusp,r.sphase||'',r.qEv,r.qPx,r.ut?'Untouched':'Active']));
   dlCSV(rows,'quarterly_report_'+curQ.label.replace(/ /g,'_')+'_'+new Date().toISOString().slice(0,10)+'.csv');
