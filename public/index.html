@@ -1524,7 +1524,9 @@ function rWkByWeek(wk,nd){
 function fWkN(){
   const d=window._D;if(!d)return;const wk=d.weekly,col=COL[d.nadi.mod]||'#555';
   const isLL=window._wkIsLL;
-  // Compute per-pillar ev counts from nadi.ev for LL
+  const _gpName=_globalProg?(d.nadi.progs||[])[parseInt(_globalProg)]||'':'';
+  const _gpFilter=_gpName?isLL?(e=>_llPillar(e.pr||'',e.sp||'')===_gpName):(e=>e.pr===_gpName):null;
+  // Compute per-pillar ev counts from nadi.ev for LL (respects sidebar program filter)
   const nadiPillarMap={};
   if(isLL){
     let activeMSet=null;
@@ -1533,7 +1535,8 @@ function fWkN(){
     const llPOf=sp=>_LL_PILLARS.find(pl=>pl.subs.includes(sp||''));
     Object.entries(d.nadi.ev||{}).forEach(([ni,evs])=>{
       const niRef=(NI[+ni]||[])[0];if(!niRef)return;
-      const fEvs=activeMSet?evs.filter(e=>activeMSet.has(e.m)):evs;
+      let fEvs=activeMSet?evs.filter(e=>activeMSet.has(e.m)):evs;
+      if(_gpName)fEvs=fEvs.filter(e=>e.sp===_gpName);
       if(!fEvs.length)return;
       const pm={};_LL_PILLARS.forEach(pl=>{pm[pl.n]=0;});
       fEvs.forEach(e=>{const pl=llPOf(e.sp||'');if(pl)pm[pl.n]++;});
@@ -1553,8 +1556,8 @@ function fWkN(){
   const _wkAllow=_globalTP||_globalDUSP||_globalPhase||_globalState||_globalProg?new Set(tRowsAll.map(r=>r.ref)):null;
   let rows=Object.entries(nw).map(([ref,evs])=>{
     if(_wkAllow&&!_wkAllow.has(ref))return null;
-    const fevs=pr?evs.filter(e=>e.pr===pr):evs;
-    if(pr&&!fevs.length) return null;
+    const fevs=(pr||_gpFilter)?evs.filter(e=>{if(pr&&e.pr!==pr)return false;if(_gpFilter&&!_gpFilter(e))return false;return true;}):evs;
+    if((pr||_gpFilter)&&!fevs.length)return null;
     const ni=NI.find(n=>n[0]===ref)||[ref,ref,'—','',''];
     const z=fevs.filter(e=>e.st==='z').length,c=fevs.filter(e=>e.st==='c').length,p=fevs.filter(e=>e.st==='p').length;
     const pax=fevs.reduce((s,e)=>s+(e.at||0),0);
@@ -1682,7 +1685,9 @@ function fBnN(){
   const sf=(document.getElementById('bnsf')||{value:''}).value;
   // All sidebar filters applied to tRowsAll; use allowset for weekly
   const _bnGAllow=_globalTP||_globalDUSP||_globalPhase||_globalState||_globalProg?new Set(tRowsAll.map(r=>r.ref)):null;
-  // For LL: compute per-pillar ev counts from nadi.ev
+  const _bnGpName=_globalProg?(d.nadi.progs||[])[parseInt(_globalProg)]||'':'';
+  const _bnGpFilter=_bnGpName?isLL?(e=>_llPillar(e.pr||'',e.sp||'')===_bnGpName):(e=>e.pr===_bnGpName):null;
+  // For LL: compute per-pillar ev counts from nadi.ev (respects sidebar program filter)
   const nadiPillarMap={};
   if(isLL){
     let activeMSet=null;
@@ -1691,7 +1696,8 @@ function fBnN(){
     const llPOf=sp=>_LL_PILLARS.find(pl=>pl.subs.includes(sp||''));
     Object.entries(d.nadi.ev||{}).forEach(([ni,evs])=>{
       const niRef=(NI[+ni]||[])[0];if(!niRef)return;
-      const fEvs=activeMSet?evs.filter(e=>activeMSet.has(e.m)):evs;
+      let fEvs=activeMSet?evs.filter(e=>activeMSet.has(e.m)):evs;
+      if(_bnGpName)fEvs=fEvs.filter(e=>e.sp===_bnGpName);
       if(!fEvs.length)return;
       const pm={};_LL_PILLARS.forEach(pl=>{pm[pl.n]=0;});
       fEvs.forEach(e=>{const pl=llPOf(e.sp||'');if(pl)pm[pl.n]++;});
@@ -1706,7 +1712,7 @@ function fBnN(){
     if(_bnAllow&&!_bnAllow.has(wkk))return;
     Object.entries(refs).forEach(([ref,evs])=>{
       if(_bnGAllow&&!_bnGAllow.has(ref))return;
-      const fevs=pr?evs.filter(e=>e.pr===pr):evs;
+      const fevs=(pr||_bnGpFilter)?evs.filter(e=>{if(pr&&e.pr!==pr)return false;if(_bnGpFilter&&!_bnGpFilter(e))return false;return true;}):evs;
       if(!fevs.length)return;
       if(!nadiMap[ref])nadiMap[ref]={z:0,c:0,p:0,tot:0,pax:0,wks:new Set()};
       nadiMap[ref].z+=fevs.filter(e=>e.st==='z').length;
