@@ -319,6 +319,8 @@ function closeSb(){
   const bd=document.getElementById('sbBd');if(bd)bd.classList.remove('open');
 }
 
+function _normDusp(tp){const t=String(tp||'').toLowerCase();if(t.includes('maxis'))return'MAXIS';if(t.includes('celcomdigi'))return'CELCOMDIGI';if(t.includes('redtone'))return'REDTONE';return'TM';}
+
 async function boot(){
   try{
     const[rS,rN]=await Promise.all([fetch('/data/meta.json').then(r=>r.json()),fetch('/data/sites.json').then(r=>r.json())]);
@@ -326,7 +328,7 @@ async function boot(){
       NI=rN.sites;
       STATES=[...new Set(NI.map(n=>n[2]))].filter(Boolean).sort();
       window._tpOpts=[...new Set(NI.map(n=>String(n[3]||'').trim()).filter(Boolean))].sort();
-      window._duspOpts=[...new Set(NI.map(n=>String(n[4]||'').trim()).filter(Boolean))].sort();
+      window._duspOpts=['TM','MAXIS','CELCOMDIGI','REDTONE'];
       window._phaseOpts=[...new Set(NI.map(n=>String(n[6]||'').trim()).filter(Boolean))].sort();
       window._niMap=Object.fromEntries(NI.map(n=>[n[0],n]));
       const _pop=(id,opts)=>{const el=document.getElementById(id);if(!el)return;opts.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;el.appendChild(o);});};
@@ -368,7 +370,7 @@ function rebuildTRowsAll(){
     const _thresh=3*Math.max(1,_qtrs.size);
     const aMap={};(nd.rows||[]).forEach(([i,e,p,pr])=>aMap[i]={e,p,pr});
     tRowsAll=NI.map((n,i)=>{
-      const ref=n[0],nm=n[1],state=n[2],stp=String(n[3]||'').trim(),sdusp=String(n[4]||'').trim(),sphase=String(n[6]||'').trim(),a=aMap[i];
+      const ref=n[0],nm=n[1],state=n[2],stp=String(n[3]||'').trim(),sdusp=_normDusp(n[3]),sphase=String(n[6]||'').trim(),a=aMap[i];
       const te=a?a.e:0,tp=a?a.p:0,pr=a?a.pr:{};
       const ap=Object.keys(pr).length;
       return{i,ref,nm,state,stp,sdusp,sphase,te,tp,pr,ap,tp2:_npl,st:te<_thresh?'u':ap<_npl?'p':'a'};
@@ -390,7 +392,7 @@ function rebuildTRowsAll(){
       aMap[idx]={e:te,p:tp,pr:prF};
     });
     tRowsAll=NI.map((n,i)=>{
-      const ref=n[0],nm=n[1],state=n[2],stp=String(n[3]||'').trim(),sdusp=String(n[4]||'').trim(),sphase=String(n[6]||'').trim(),a=aMap[i];
+      const ref=n[0],nm=n[1],state=n[2],stp=String(n[3]||'').trim(),sdusp=_normDusp(n[3]),sphase=String(n[6]||'').trim(),a=aMap[i];
       const te=a?a.e:0,tp=a?a.p:0,pr=a?a.pr:{};
       const ap=Object.keys(pr).length;
       return{i,ref,nm,state,stp,sdusp,sphase,te,tp,pr,ap,tp2:_npl,st:te<_thresh?'u':ap<_npl?'p':'a'};
@@ -1570,7 +1572,7 @@ function fWkN(){
     const ni=NI.find(n=>n[0]===ref)||[ref,ref,'—','',''];
     const z=fevs.filter(e=>e.st==='z').length,c=fevs.filter(e=>e.st==='c').length,p=fevs.filter(e=>e.st==='p').length;
     const pax=fevs.reduce((s,e)=>s+(e.at||0),0);
-    return{ref,nm:ni[1],state:ni[2],stp:String(ni[3]||'').trim(),sdusp:String(ni[4]||'').trim(),sphase:String(ni[6]||'').trim(),evs:fevs,z,c,p,tot:fevs.length,pax};
+    return{ref,nm:ni[1],state:ni[2],stp:String(ni[3]||'').trim(),sdusp:_normDusp(ni[3]),sphase:String(ni[6]||'').trim(),evs:fevs,z,c,p,tot:fevs.length,pax};
   }).filter(r=>{
     if(!r)return false;
     if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
@@ -1661,7 +1663,7 @@ function rWkByNadi(wk,nd){
     nadiMap[ref].z+=evs.filter(e=>e.st==='z').length;nadiMap[ref].c+=evs.filter(e=>e.st==='c').length;
     nadiMap[ref].p+=evs.filter(e=>e.st==='p').length;nadiMap[ref].tot+=evs.length;nadiMap[ref].wks.add(wkk);
   });});
-  const allRows=NI.map(([ref,nm,state,stp='',sdusp=''])=>{const m=nadiMap[ref];return{ref,nm,state,stp:String(stp||'').trim(),sdusp:String(sdusp||'').trim(),z:m?m.z:0,c:m?m.c:0,p:m?m.p:0,tot:m?m.tot:0,wks:m?m.wks.size:0,ut:!m};});
+  const allRows=NI.map(([ref,nm,state,stp=''])=>{const m=nadiMap[ref];return{ref,nm,state,stp:String(stp||'').trim(),sdusp:_normDusp(stp),z:m?m.z:0,c:m?m.c:0,p:m?m.p:0,tot:m?m.tot:0,wks:m?m.wks.size:0,ut:!m};});
   const bnThead=isLL?(()=>{
     const _ap=_LL_PILLARS.flatMap(pl=>pl.subs.map((s,si)=>({name:s,color:pl.c,isFirst:si===0})));
     const hPl=_LL_PILLARS.map(pl=>`<th colspan="${pl.subs.length*2}" style="text-align:center;font-size:9px;font-weight:700;color:${pl.c};border-bottom:1px solid ${pl.c}40">${pl.n}</th>`).join('');
@@ -1739,7 +1741,7 @@ function fBnN(){
 
   const _bnBase=_bnGAllow?NI.filter(n=>_bnGAllow.has(n[0])):NI;
   const allRows=_bnBase.map(n=>{
-    const ref=n[0],nm=n[1],state=n[2],stp=String(n[3]||'').trim(),sdusp=String(n[4]||'').trim();
+    const ref=n[0],nm=n[1],state=n[2],stp=String(n[3]||'').trim(),sdusp=_normDusp(n[3]);
     const m=nadiMap[ref];
     return{ref,nm,state,stp,sdusp,z:m?m.z:0,c:m?m.c:0,p:m?m.p:0,tot:m?m.tot:0,pax:m?m.pax:0,wks:m?m.wks.size:0,ut:!m};
   });
