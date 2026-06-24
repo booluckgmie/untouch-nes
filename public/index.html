@@ -319,7 +319,7 @@ function closeSb(){
   const bd=document.getElementById('sbBd');if(bd)bd.classList.remove('open');
 }
 
-function _normDusp(tp){const t=String(tp||'').toLowerCase();if(t.includes('maxis'))return'MAXIS';if(t.includes('celcomdigi'))return'CELCOMDIGI';if(t.includes('redtone'))return'REDTONE';return'TM';}
+function _normDusp(tp){const _m={'MSD':'TM','NERA-Maxis':'MAXIS','ETD MAKMUR':'MAXIS','SD':'MAXIS','SAMUDRA':'MAXIS','PERWIRA':'MAXIS','CITAGLOBAL':'MAXIS','AFIINTRA':'MAXIS','NERA-CelcomDigi':'CELCOMDIGI','CCM':'CELCOMDIGI','PERAGOLD':'CELCOMDIGI','OSS':'CELCOMDIGI','RedTone TP':'REDTONE'};return _m[String(tp||'').trim()]||'TM';}
 
 async function boot(){
   try{
