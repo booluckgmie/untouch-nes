@@ -392,13 +392,14 @@ function rebuildTRowsAll(){
       return{i,ref,nm,state,stp,sdusp,sphase,te,tp,pr,ap,tp2:_npl,st:te<_thresh?'u':ap<_npl?'p':'a'};
     });
   }
-  // Apply global sidebar filters (TP / DUSP / Phase / State)
-  if(_globalTP||_globalDUSP||_globalPhase||_globalState){
+  // Apply global sidebar filters (TP / DUSP / Phase / State / Program)
+  if(_globalTP||_globalDUSP||_globalPhase||_globalState||_globalProg){
     tRowsAll=tRowsAll.filter(r=>{
       if(_globalTP&&r.stp!==_globalTP)return false;
       if(_globalDUSP&&r.sdusp!==_globalDUSP)return false;
       if(_globalPhase&&r.sphase!==_globalPhase)return false;
       if(_globalState&&r.state!==_globalState)return false;
+      if(_globalProg){const v=r.pr[_globalProg];if(!v||(Array.isArray(v)?v[0]:v)<=0)return false;}
       return true;
     });
   }
@@ -1544,8 +1545,8 @@ function fWkN(){
   const st=(document.getElementById('wkst')||{value:''}).value;
   const pr=(document.getElementById('wkpr')||{value:''}).value;
   const sf=(document.getElementById('wksf')||{value:''}).value;
-  // Global TP/DUSP/Phase already applied to tRowsAll; build a ref allowset
-  const _wkAllow=_globalTP||_globalDUSP||_globalPhase?new Set(tRowsAll.map(r=>r.ref)):null;
+  // All sidebar filters applied to tRowsAll; build a ref allowset for any active filter
+  const _wkAllow=_globalTP||_globalDUSP||_globalPhase||_globalState||_globalProg?new Set(tRowsAll.map(r=>r.ref)):null;
   let rows=Object.entries(nw).map(([ref,evs])=>{
     if(_wkAllow&&!_wkAllow.has(ref))return null;
     const fevs=pr?evs.filter(e=>e.pr===pr):evs;
@@ -1675,8 +1676,8 @@ function fBnN(){
   const st=(document.getElementById('bnst')||{value:''}).value;
   const pr=(document.getElementById('bnpr')||{value:''}).value;
   const sf=(document.getElementById('bnsf')||{value:''}).value;
-  // Global TP/DUSP/Phase already applied to tRowsAll; use allowset for weekly
-  const _bnGAllow=_globalTP||_globalDUSP||_globalPhase?new Set(tRowsAll.map(r=>r.ref)):null;
+  // All sidebar filters applied to tRowsAll; use allowset for weekly
+  const _bnGAllow=_globalTP||_globalDUSP||_globalPhase||_globalState||_globalProg?new Set(tRowsAll.map(r=>r.ref)):null;
   // For LL: compute per-pillar ev counts from nadi.ev
   const nadiPillarMap={};
   if(isLL){
@@ -1802,9 +1803,11 @@ function fWkEv(){
   const pr=(document.getElementById('evPr')||{value:''}).value;
   const q=(document.getElementById('evQ')||{value:''}).value.toLowerCase();
   const _evAllow=selWeek?new Set([selWeek]):selMonth?new Set((_monthSeq[selMonth]||{}).wks||[]):null;
+  const _evSBRefs=_globalTP||_globalDUSP||_globalPhase||_globalState||_globalProg?new Set(tRowsAll.map(r=>r.ref)):null;
   const f=wk.zero.filter(e=>{
     if(_evAllow&&!_evAllow.has(e.wk))return false;
     if(!_evAllow&&wkk&&e.wk!==wkk)return false;
+    if(_evSBRefs&&!_evSBRefs.has(e.ref))return false;
     if(st&&e.s!==st)return false;
     if(pr&&e.pr!==pr)return false;
     if(q&&!e.nm.toLowerCase().includes(q)&&!e.ref.toLowerCase().includes(q))return false;
