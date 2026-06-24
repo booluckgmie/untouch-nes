@@ -568,21 +568,31 @@ async function gSub(id,btn){
   loadSubData(id);
 }
 
-// Canonical LL sub-program classifier — priority matches pivot_shared._ll_classifier (last-wins = skill highest)
-function _llPillar(pn){const p=(pn||'').toLowerCase();if(p.includes('skillforge')||p.includes('skill'))return'ESPORT';if(p.includes('cyber')||p.includes('siber')||p.includes('security'))return'CYBERSECURITY';if(p.includes('ekelas')||p.includes('e-kelas'))return'EKELAS';if(p.includes('tuisyen')||p.includes('tuition')||p.includes('guidance'))return'TUISYEN RAKYAT';if(p.includes('mahir'))return'MAHIR';if(p.includes('esport'))return'ESPORT';if(p.includes('tiny')||p.includes('techie'))return'TINYTECHIES';return'CYBERSECURITY';}
+// Canonical LL sub-program classifier — uses session name; specific keywords before generic 'skill'
+function _llPillar(pn){const p=(pn||'').toLowerCase();if(p.includes('ekelas')||p.includes('e-kelas'))return'EKELAS';if(p.includes('tuisyen')||p.includes('tuition')||p.includes('guidance'))return'TUISYEN RAKYAT';if(p.includes('mahir'))return'MAHIR';if(p.includes('esport')||p.includes('e-sukan')||p.includes('esukan'))return'ESPORT';if(p.includes('skillforge')||p.includes('skill'))return'ESPORT';if(p.includes('cyber')||p.includes('siber')||p.includes('security'))return'CYBERSECURITY';if(p.includes('tiny')||p.includes('techie'))return'TINYTECHIES';return'CYBERSECURITY';}
 
 function normalizeSubData(raw,id){
   if(!Array.isArray(raw.nadi))return raw; // already dict format
   const s=SUBS[id]||{};
   const refToIdx={};NI.forEach((n,i)=>{refToIdx[n[0]]=i;});
 
-  // For Lifelong Learning, collapse raw program_name values using global _llPillar
+  // For Lifelong Learning: reclassify using session name (more reliable than template-based sp)
+  // and rebuild n.programs + per-month-per-prog map from individual events
+  const _llMPM={};  // {refid: {monthLabel: {prog: {events,pax}}}}
   if(id===2){
     raw.nadi.forEach(n=>{
-      if(!n.programs||!Object.keys(n.programs).length)return;
-      const rem={};
-      Object.entries(n.programs).forEach(([pn,d])=>{const t=_llPillar(pn);if(!rem[t])rem[t]={events:0,pax:0};rem[t].events+=(d.events||0);rem[t].pax+=(d.pax||0);});
-      n.programs=rem;
+      const pm={},mpm={};
+      (n.ev||[]).forEach(e=>{
+        e.sp=_llPillar(e.n||'');
+        const sp=e.sp,ml=e.m||'';
+        if(!pm[sp])pm[sp]={events:0,pax:0};
+        pm[sp].events++;pm[sp].pax+=(e.a||0);
+        if(!mpm[ml])mpm[ml]={};
+        if(!mpm[ml][sp])mpm[ml][sp]={events:0,pax:0};
+        mpm[ml][sp].events++;mpm[ml][sp].pax+=(e.a||0);
+      });
+      if(Object.keys(pm).length)n.programs=pm;
+      _llMPM[n.refid]=mpm;
     });
   }
 
@@ -612,10 +622,11 @@ function normalizeSubData(raw,id){
       const idx=refToIdx[ref];if(idx===undefined)return;
       if(!mMap[idx])mMap[idx]={tot:new Array(nm).fill(0),pax:new Array(nm).fill(0),pr:{}};
       mMap[idx].tot[mi]=data.events||0;mMap[idx].pax[mi]=data.pax||0;
-      // sub_id=2: backend now emits actual per-program monthly data (canonical names)
-      if(id===2&&data.pr){
+      // sub_id=2: use per-month-per-prog map rebuilt from individual events (correct classification)
+      if(id===2){
+        const mpd=(_llMPM[ref]||{})[m.label]||{};
         progs.forEach((pn,k)=>{
-          const pg=data.pr[pn];if(!pg)return;
+          const pg=mpd[pn];if(!pg)return;
           if(!mMap[idx].pr[String(k)])mMap[idx].pr[String(k)]={ev:new Array(nm).fill(0),px:new Array(nm).fill(0)};
           mMap[idx].pr[String(k)].ev[mi]=pg.events||0;
           mMap[idx].pr[String(k)].px[mi]=pg.pax||0;
