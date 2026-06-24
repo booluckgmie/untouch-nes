@@ -101,6 +101,10 @@ table.t-mo tfoot td{position:sticky;bottom:0;z-index:2;padding:5px 6px;font-weig
 table.t-mo tfoot td.f-ref{position:sticky;left:0;z-index:3;background:#fafaf8;text-align:left}
 table.t-mo tfoot td.f-nm {position:sticky;left:90px;z-index:3;background:#fafaf8}
 table.t-mo tfoot td.f-st {position:sticky;left:240px;z-index:3;background:#fafaf8;border-right:2px solid var(--line)}
+/* WEEKLY TABLE — triple header for LL pillar view */
+table.t-wk thead tr:nth-child(1) th{position:sticky;top:0;z-index:3;background:#fafaf8;white-space:nowrap}
+table.t-wk thead tr:nth-child(2) th{position:sticky;top:26px;z-index:3;background:#f3f2f0;white-space:nowrap;border-bottom:none}
+table.t-wk thead tr:nth-child(3) th{position:sticky;top:52px;z-index:3;background:#ece9e4;white-space:nowrap;border-bottom:2px solid var(--line)}
 .h0{color:var(--line2)}.h1{background:#eaf6f1;color:#0d6e50}
 .h2{background:#c0e9d8;color:#0a5540;font-weight:600}.h3{background:#6fcfae;color:#04362a;font-weight:700}
 .h4{background:#219a6e;color:#fff;font-weight:700}
@@ -1483,9 +1487,13 @@ function wTab(t){
 function rWkByWeek(wk,nd){
   const col=COL[nd.mod]||'#555';
   const d=window._D;const isLL=d&&d.sub_id===2;
-  const wkThead=isLL
-    ?`<th style="width:26px">#</th><th>NADI site</th><th>State</th><th style="text-align:center;font-size:9px;font-weight:700;color:#4c44b0">NURTURE</th><th style="text-align:center;font-size:9px;font-weight:700;color:#0b7575">SKILLFORGE</th><th style="text-align:center;font-size:9px;font-weight:700;color:#0b7a58">TINYTECHIES</th><th>Ev.</th><th>Zero</th><th>Part.</th><th>Compl.</th>`
-    :`<th style="width:26px">#</th><th>NADI site</th><th>State</th><th>Ev.</th><th>Zero</th><th>Part.</th><th>Compl.</th>`;
+  const wkThead=isLL?(()=>{
+    const _ap=_LL_PILLARS.flatMap(pl=>pl.subs.map((s,si)=>({name:s,color:pl.c,isFirst:si===0})));
+    const hPl=_LL_PILLARS.map(pl=>`<th colspan="${pl.subs.length*2}" style="text-align:center;font-size:9px;font-weight:700;color:${pl.c};border-bottom:1px solid ${pl.c}40">${pl.n}</th>`).join('');
+    const hPg=_ap.map(({name,color,isFirst})=>{const bl=isFirst?'border-left:1px solid var(--line2)':'border-left:1px dashed var(--line2)';const sh=name.length>13?name.slice(0,12)+'…':name;return`<th colspan="2" style="text-align:center;padding:2px 5px;font-size:7px;font-weight:600;color:${color};${bl};white-space:nowrap">${sh}</th>`;}).join('');
+    const hEP=_ap.map(({isFirst})=>{const bl=isFirst?'border-left:1px solid var(--line2)':'';return`<th style="text-align:center;font-size:8px;padding:3px 4px;${bl}">Ev</th><th style="text-align:center;font-size:8px;padding:3px 4px">Pax</th>`;}).join('');
+    return`<tr><th rowspan="4" style="width:26px">#</th><th rowspan="4">NADI site</th><th rowspan="4">State</th>${hPl}<th rowspan="4">Ev.</th><th rowspan="4">Zero</th><th rowspan="4">Part.</th><th rowspan="4">Compl.</th></tr><tr>${hPg}</tr><tr>${hEP}</tr><tr><th colspan="${_ap.length*2}" style="height:5px;padding:0;border:none;background:transparent"></th></tr>`;
+  })():`<tr><th style="width:26px">#</th><th>NADI site</th><th>State</th><th>Ev.</th><th>Zero</th><th>Part.</th><th>Compl.</th></tr>`;
   window._wkIsLL=isLL;
   document.getElementById('wTC').innerHTML=`
     <div class="split">
@@ -1497,7 +1505,7 @@ function rWkByWeek(wk,nd){
           <select id="wksf" onchange="fWkN()"><option value="">All</option><option value="z">Has zero</option><option value="c">All complete</option></select>
           <span class="fc" id="wkfc"></span>
         </div>
-        <div class="tbl-wrap"><table><thead><tr>${wkThead}</tr></thead><tbody id="wkNTb"></tbody></table></div>
+        <div class="tbl-wrap"><table${isLL?' class="t-wk"':''}><thead>${wkThead}</thead><tbody id="wkNTb"></tbody></table></div>
       </div>
       <div class="split-r" id="wkPR">
         <div class="ph"><div><h4 id="wkPT"></h4><div class="pref" id="wkPRf"></div></div>
@@ -1511,23 +1519,6 @@ function fWkN(){
   const isLL=window._wkIsLL;
   const _gpName=_globalProg?(d.nadi.progs||[])[parseInt(_globalProg)]||'':'';
   const _gpFilter=_gpName?isLL?(e=>_llPillar(e.pr||'',e.sp||'')===_gpName):(e=>e.pr===_gpName):null;
-  // Compute per-pillar ev counts from nadi.ev for LL (respects sidebar program filter)
-  const nadiPillarMap={};
-  if(isLL){
-    let activeMSet=null;
-    if(selWeek){const wkM=Object.entries(_monthSeq||{}).find(([,ms])=>(ms.wks||[]).includes(selWeek));if(wkM)activeMSet=new Set([wkM[0]]);}
-    else if(selMonth){activeMSet=new Set([selMonth]);}
-    const llPOf=sp=>_LL_PILLARS.find(pl=>pl.subs.includes(sp||''));
-    Object.entries(d.nadi.ev||{}).forEach(([ni,evs])=>{
-      const niRef=(NI[+ni]||[])[0];if(!niRef)return;
-      let fEvs=activeMSet?evs.filter(e=>activeMSet.has(e.m)):evs;
-      if(_gpName)fEvs=fEvs.filter(e=>e.sp===_gpName);
-      if(!fEvs.length)return;
-      const pm={};_LL_PILLARS.forEach(pl=>{pm[pl.n]=0;});
-      fEvs.forEach(e=>{const pl=llPOf(e.sp||'');if(pl)pm[pl.n]++;});
-      nadiPillarMap[niRef]=pm;
-    });
-  }
   let nw;
   if(selWeek){nw=wk.nw[selWeek]||{};}
   else if(selMonth){const mWks=(_monthSeq[selMonth]||{}).wks||[];
@@ -1545,7 +1536,8 @@ function fWkN(){
     const ni=NI.find(n=>n[0]===ref)||[ref,ref,'—','',''];
     const z=fevs.filter(e=>e.st==='z').length,c=fevs.filter(e=>e.st==='c').length,p=fevs.filter(e=>e.st==='p').length;
     const pax=fevs.reduce((s,e)=>s+(e.at||0),0);
-    return{ref,nm:ni[1],state:ni[2],stp:String(ni[3]||'').trim(),sdusp:String(ni[4]||'').trim(),evs:fevs,z,c,p,tot:fevs.length,pax};
+    const progMap={};if(isLL)fevs.forEach(e=>{const g=_llPillar(e.pr||'',e.sp||'');if(!progMap[g])progMap[g]={ev:0,pax:0};progMap[g].ev++;progMap[g].pax+=e.at||0;});
+    return{ref,nm:ni[1],state:ni[2],stp:String(ni[3]||'').trim(),sdusp:String(ni[4]||'').trim(),evs:fevs,z,c,p,tot:fevs.length,pax,progMap};
   }).filter(r=>{
     if(!r)return false;
     if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
@@ -1559,8 +1551,9 @@ function fWkN(){
   const _wZS=document.getElementById('wkKpiZS');if(_wZS)_wZS.textContent=(_wEv?Math.round(_wZ/_wEv*100):0)+'%';
   const _wPS=document.getElementById('wkKpiPS');if(_wPS)_wPS.textContent=(_wEv?Math.round(_wP/_wEv*100):0)+'%';
   const _wCS=document.getElementById('wkKpiCS');if(_wCS)_wCS.textContent=(_wEv?Math.round(_wC/_wEv*100):0)+'%';
+  const _apWk=isLL?_LL_PILLARS.flatMap(pl=>pl.subs.map((s,si)=>({name:s,color:pl.c,isFirst:si===0}))):[];
   document.getElementById('wkNTb').innerHTML=rows.map((r,i)=>{
-    const pillarCells=isLL?_LL_PILLARS.map(pl=>{const ev=(nadiPillarMap[r.ref]||{})[pl.n]||0;return`<td style="text-align:center;font-size:11px;font-weight:${ev?600:400};color:${ev?pl.c:'var(--t3)'}">${ev||'·'}</td>`;}).join(''):'';
+    const pillarCells=isLL?_apWk.map(({name,color,isFirst})=>{const pm=r.progMap[name]||{ev:0,pax:0};const bl=isFirst?'border-left:1px solid var(--line2)':'';return`<td style="text-align:center;font-size:11px;font-weight:${pm.ev?600:400};color:${pm.ev?color:'var(--t3)'};${bl}">${pm.ev||'·'}</td><td style="text-align:center;font-size:10px;color:${pm.pax?'var(--t2)':'var(--t3)'}">${pm.pax||'·'}</td>`;}).join(''):'';
     return`<tr onclick="oWkNP('${r.ref}')" id="wkr_${r.ref.replace(/[^a-z0-9]/gi,'_')}">
       <td style="color:var(--t3);font-size:10px">${i+1}</td>
       <td><div style="font-weight:600">${ce(r.nm)}</div><div style="font-size:10px;color:var(--t3)">${r.ref}</div></td>
@@ -1636,9 +1629,13 @@ function rWkByNadi(wk,nd){
     nadiMap[ref].p+=evs.filter(e=>e.st==='p').length;nadiMap[ref].tot+=evs.length;nadiMap[ref].wks.add(wkk);
   });});
   const allRows=NI.map(([ref,nm,state])=>{const m=nadiMap[ref];return{ref,nm,state,z:m?m.z:0,c:m?m.c:0,p:m?m.p:0,tot:m?m.tot:0,wks:m?m.wks.size:0,ut:!m};});
-  const bnThead=isLL
-    ?`<th style="width:26px">#</th><th>NADI site</th><th>State</th><th style="text-align:center;font-size:9px;font-weight:700;color:#4c44b0">NURTURE</th><th style="text-align:center;font-size:9px;font-weight:700;color:#0b7575">SKILLFORGE</th><th style="text-align:center;font-size:9px;font-weight:700;color:#0b7a58">TINYTECHIES</th><th>Total</th><th>Zero</th><th>Part.</th><th>Compl.</th>`
-    :`<th style="width:26px">#</th><th>NADI site</th><th>State</th><th>Wks</th><th>Total</th><th>Zero</th><th>Part.</th><th>Compl.</th>`;
+  const bnThead=isLL?(()=>{
+    const _ap=_LL_PILLARS.flatMap(pl=>pl.subs.map((s,si)=>({name:s,color:pl.c,isFirst:si===0})));
+    const hPl=_LL_PILLARS.map(pl=>`<th colspan="${pl.subs.length*2}" style="text-align:center;font-size:9px;font-weight:700;color:${pl.c};border-bottom:1px solid ${pl.c}40">${pl.n}</th>`).join('');
+    const hPg=_ap.map(({name,color,isFirst})=>{const bl=isFirst?'border-left:1px solid var(--line2)':'border-left:1px dashed var(--line2)';const sh=name.length>13?name.slice(0,12)+'…':name;return`<th colspan="2" style="text-align:center;padding:2px 5px;font-size:7px;font-weight:600;color:${color};${bl};white-space:nowrap">${sh}</th>`;}).join('');
+    const hEP=_ap.map(({isFirst})=>{const bl=isFirst?'border-left:1px solid var(--line2)':'';return`<th style="text-align:center;font-size:8px;padding:3px 4px;${bl}">Ev</th><th style="text-align:center;font-size:8px;padding:3px 4px">Pax</th>`;}).join('');
+    return`<tr><th rowspan="4" style="width:26px">#</th><th rowspan="4">NADI site</th><th rowspan="4">State</th>${hPl}<th rowspan="4">Total</th><th rowspan="4">Zero</th><th rowspan="4">Part.</th><th rowspan="4">Compl.</th></tr><tr>${hPg}</tr><tr>${hEP}</tr><tr><th colspan="${_ap.length*2}" style="height:5px;padding:0;border:none;background:transparent"></th></tr>`;
+  })():`<tr><th style="width:26px">#</th><th>NADI site</th><th>State</th><th>Wks</th><th>Total</th><th>Zero</th><th>Part.</th><th>Compl.</th></tr>`;
   window._bnIsLL=isLL;
   document.getElementById('wTC').innerHTML=`
     <div class="split">
@@ -1650,7 +1647,7 @@ function rWkByNadi(wk,nd){
           <select id="bnsf" onchange="fBnN()"><option value="">All status</option><option value="z">Has zero</option><option value="ok">All complete</option><option value="ut">Untouched</option></select>
           <span class="fc" id="bnfc"></span>
         </div>
-        <div class="tbl-wrap"><table><thead><tr>${bnThead}</tr></thead><tbody id="bnTb"></tbody></table></div>
+        <div class="tbl-wrap"><table${isLL?' class="t-wk"':''}><thead>${bnThead}</thead><tbody id="bnTb"></tbody></table></div>
       </div>
       <div class="split-r" id="bnPR">
         <div class="ph"><div><h4 id="bnPT"></h4><div class="pref" id="bnPRf"></div></div>
@@ -1670,24 +1667,6 @@ function fBnN(){
   const _bnGAllow=_globalTP||_globalDUSP||_globalPhase||_globalState||_globalProg?new Set(tRowsAll.map(r=>r.ref)):null;
   const _bnGpName=_globalProg?(d.nadi.progs||[])[parseInt(_globalProg)]||'':'';
   const _bnGpFilter=_bnGpName?isLL?(e=>_llPillar(e.pr||'',e.sp||'')===_bnGpName):(e=>e.pr===_bnGpName):null;
-  // For LL: compute per-pillar ev counts from nadi.ev (respects sidebar program filter)
-  const nadiPillarMap={};
-  if(isLL){
-    let activeMSet=null;
-    if(selWeek){const wkM=Object.entries(_monthSeq||{}).find(([,ms])=>(ms.wks||[]).includes(selWeek));if(wkM)activeMSet=new Set([wkM[0]]);}
-    else if(selMonth){activeMSet=new Set([selMonth]);}
-    const llPOf=sp=>_LL_PILLARS.find(pl=>pl.subs.includes(sp||''));
-    Object.entries(d.nadi.ev||{}).forEach(([ni,evs])=>{
-      const niRef=(NI[+ni]||[])[0];if(!niRef)return;
-      let fEvs=activeMSet?evs.filter(e=>activeMSet.has(e.m)):evs;
-      if(_bnGpName)fEvs=fEvs.filter(e=>e.sp===_bnGpName);
-      if(!fEvs.length)return;
-      const pm={};_LL_PILLARS.forEach(pl=>{pm[pl.n]=0;});
-      fEvs.forEach(e=>{const pl=llPOf(e.sp||'');if(pl)pm[pl.n]++;});
-      nadiPillarMap[niRef]=pm;
-    });
-  }
-
   // Rebuild nadiMap fresh — so program filter correctly recounts zeros/completes
   const nadiMap={};
   const _bnAllow=selWeek?new Set([selWeek]):selMonth?new Set((_monthSeq[selMonth]||{}).wks||[]):null;
@@ -1697,13 +1676,14 @@ function fBnN(){
       if(_bnGAllow&&!_bnGAllow.has(ref))return;
       const fevs=(pr||_bnGpFilter)?evs.filter(e=>{if(pr&&e.pr!==pr)return false;if(_bnGpFilter&&!_bnGpFilter(e))return false;return true;}):evs;
       if(!fevs.length)return;
-      if(!nadiMap[ref])nadiMap[ref]={z:0,c:0,p:0,tot:0,pax:0,wks:new Set()};
+      if(!nadiMap[ref])nadiMap[ref]={z:0,c:0,p:0,tot:0,pax:0,wks:new Set(),progs:{}};
       nadiMap[ref].z+=fevs.filter(e=>e.st==='z').length;
       nadiMap[ref].c+=fevs.filter(e=>e.st==='c').length;
       nadiMap[ref].p+=fevs.filter(e=>e.st==='p').length;
       nadiMap[ref].tot+=fevs.length;
       nadiMap[ref].pax+=fevs.reduce((s,e)=>s+(e.at||0),0);
       nadiMap[ref].wks.add(wkk);
+      if(isLL)fevs.forEach(e=>{const g=_llPillar(e.pr||'',e.sp||'');if(!nadiMap[ref].progs[g])nadiMap[ref].progs[g]={ev:0,pax:0};nadiMap[ref].progs[g].ev++;nadiMap[ref].progs[g].pax+=e.at||0;});
     });
   });
 
@@ -1711,7 +1691,7 @@ function fBnN(){
   const allRows=_bnBase.map(n=>{
     const ref=n[0],nm=n[1],state=n[2],stp=String(n[3]||'').trim(),sdusp=String(n[4]||'').trim();
     const m=nadiMap[ref];
-    return{ref,nm,state,stp,sdusp,z:m?m.z:0,c:m?m.c:0,p:m?m.p:0,tot:m?m.tot:0,pax:m?m.pax:0,wks:m?m.wks.size:0,ut:!m};
+    return{ref,nm,state,stp,sdusp,z:m?m.z:0,c:m?m.c:0,p:m?m.p:0,tot:m?m.tot:0,pax:m?m.pax:0,wks:m?m.wks.size:0,ut:!m,progs:m?m.progs:{}};
   });
 
   const f=allRows.filter(r=>{
@@ -1730,8 +1710,9 @@ function fBnN(){
   const _bZS=document.getElementById('wkKpiZS');if(_bZS)_bZS.textContent=(_bEv?Math.round(_bZ/_bEv*100):0)+'%';
   const _bPS=document.getElementById('wkKpiPS');if(_bPS)_bPS.textContent=(_bEv?Math.round(_bP/_bEv*100):0)+'%';
   const _bCS=document.getElementById('wkKpiCS');if(_bCS)_bCS.textContent=(_bEv?Math.round(_bC/_bEv*100):0)+'%';
+  const _apBn=isLL?_LL_PILLARS.flatMap(pl=>pl.subs.map((s,si)=>({name:s,color:pl.c,isFirst:si===0}))):[];
   document.getElementById('bnTb').innerHTML=f.map((r,i)=>{
-    const pillarCells=isLL?_LL_PILLARS.map(pl=>{const ev=(nadiPillarMap[r.ref]||{})[pl.n]||0;return`<td style="text-align:center;font-size:11px;font-weight:${ev?600:400};color:${ev?pl.c:'var(--t3)'}">${ev||'·'}</td>`;}).join(''):`<td style="color:var(--t2)">${r.wks||'—'}</td>`;
+    const pillarCells=isLL?_apBn.map(({name,color,isFirst})=>{const pm=(r.progs||{})[name]||{ev:0,pax:0};const bl=isFirst?'border-left:1px solid var(--line2)':'';return`<td style="text-align:center;font-size:11px;font-weight:${pm.ev?600:400};color:${pm.ev?color:'var(--t3)'};${bl}">${pm.ev||'·'}</td><td style="text-align:center;font-size:10px;color:${pm.pax?'var(--t2)':'var(--t3)'}">${pm.pax||'·'}</td>`;}).join(''):`<td style="color:var(--t2)">${r.wks||'—'}</td>`;
     return`<tr onclick="oBnP('${r.ref}')" id="bnr_${r.ref.replace(/[^a-z0-9]/gi,'_')}">
       <td style="color:var(--t3);font-size:10px">${i+1}</td>
       <td><div style="font-weight:${r.ut?400:600};color:${r.ut?'var(--t3)':'var(--t1)'}">${ce(r.nm)}</div><div style="font-size:10px;color:var(--t3)">${r.ref}</div></td>
