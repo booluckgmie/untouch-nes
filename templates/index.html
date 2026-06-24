@@ -830,8 +830,8 @@ function renderMonthly(d){
       return `<th colspan="${pl.pis.length*2}" data-pl="${pli}" style="text-align:center;padding:2px 5px;font-size:7px;font-weight:400;color:${pc};opacity:.75;border-left:1px solid var(--line2);white-space:normal">${ce(sub)}</th>`;
     }).join('');
     const hCombined=displayPis.map(pi=>{
-      const pli=piToPl[pi];const pc=PROG_COLORS[pli%PROG_COLORS.length];const pn=progs[pi]||'';
-      return `<th data-pi="${pi}" data-pl="${pli}" onclick="openProgColPanel(${pi})" style="text-align:center;padding:2px 4px;font-size:7px;font-weight:700;color:${pc};border-left:1px solid var(--line2);white-space:nowrap;cursor:pointer" title="${ce(pn)}">${ce(pn.length>10?pn.slice(0,9)+'…':pn)}<br><span style="font-size:6px;font-weight:400;color:var(--t3)">Ev</span></th><th data-pi="${pi}" data-pl="${pli}" style="text-align:center;padding:2px 4px;font-size:7px;color:var(--t3)">Pax</th>`;
+      const pli=piToPl[pi];
+      return `<th data-pi="${pi}" data-pl="${pli}" onclick="openProgColPanel(${pi})" style="text-align:center;padding:2px 4px;font-size:8px;color:var(--t3);border-left:1px solid var(--line2);cursor:pointer">Ev</th><th data-pi="${pi}" data-pl="${pli}" style="text-align:center;padding:2px 4px;font-size:8px;color:var(--t3)">Pax</th>`;
     }).join('');
     theadInner=`<tr>
       <th class="f-ref" rowspan="3" style="vertical-align:bottom">Ref ID</th>
