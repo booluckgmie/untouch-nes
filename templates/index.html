@@ -275,6 +275,10 @@ table.t-wk thead tr:nth-child(3) th{position:sticky;top:52px;z-index:3;backgroun
   padding:5px 8px;font-size:11px;border:1px solid var(--line);border-radius:6px;
   background:none;cursor:pointer;color:var(--t3);transition:all .15s}
 .lgnd-btn:hover{border-color:var(--purple);color:var(--purple);background:#f5f4ff}
+.lgnd-btn-icon{width:20px;height:20px;border:1px solid var(--line);border-radius:50%;
+  background:none;cursor:pointer;font-size:11px;font-weight:700;color:var(--t3);
+  display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1}
+.lgnd-btn-icon:hover{border-color:var(--purple);color:var(--purple);background:#f5f4ff}
 @media(max-width:600px){.lgnd-body{grid-template-columns:1fr}.lgnd-sec.full{grid-column:1}}
 </style>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
@@ -284,10 +288,13 @@ table.t-wk thead tr:nth-child(3) th{position:sticky;top:52px;z-index:3;backgroun
 <div class="sb-backdrop" id="sbBd" onclick="closeSb()"></div>
 <div class="shell">
 <aside class="sb">
-  <div class="sb-top">
-    <div class="sb-logo">NES Analytics</div>
-    <div class="sb-title">Dashboard</div>
-    <div class="sb-sub" id="sb-upd">Connecting…</div>
+  <div class="sb-top" style="display:flex;justify-content:space-between;align-items:flex-start">
+    <div>
+      <div class="sb-logo">NES Analytics</div>
+      <div class="sb-title">Dashboard</div>
+      <div class="sb-sub" id="sb-upd">Connecting…</div>
+    </div>
+    <button class="lgnd-btn-icon" onclick="openLegend()" title="Legend &amp; Definitions">?</button>
   </div>
   <div class="sb-filter">
     <label>Date range</label>
@@ -383,6 +390,22 @@ table.t-wk thead tr:nth-child(3) th{position:sticky;top:52px;z-index:3;backgroun
         <div class="lgnd-row"><span class="lgnd-abbr">Ref ID</span><span class="lgnd-def">MCMC official reference code for the NADI centre</span></div>
         <div class="lgnd-row"><span class="lgnd-abbr"># (row)</span><span class="lgnd-def">Sequential rank in the current filtered view</span></div>
       </div>
+    </div>
+
+    <!-- Weekly Bar Chart -->
+    <div class="lgnd-sec">
+      <div class="lgnd-sec-title">Weekly Bar Chart Segments</div>
+      <div class="lgnd-row"><div class="lgnd-swatch" style="background:var(--cc);border-radius:2px 2px 0 0"></div><span class="lgnd-def"><b style="color:var(--cc)">Complete</b> — events with full attendance</span></div>
+      <div class="lgnd-row"><div class="lgnd-swatch" style="background:var(--pc)"></div><span class="lgnd-def"><b style="color:var(--pc)">Partial</b> — events with some attendance</span></div>
+      <div class="lgnd-row"><div class="lgnd-swatch" style="background:var(--rc)"></div><span class="lgnd-def"><b style="color:var(--rc)">Zero</b> — events with 0 attendees</span></div>
+      <div class="lgnd-row"><span class="lgnd-def" style="font-size:10px;color:var(--t3)">Bars are stacked per week. Taller = more events. Click a bar to drill into that week.</span></div>
+    </div>
+
+    <!-- Active Filter -->
+    <div class="lgnd-sec">
+      <div class="lgnd-sec-title">Sidebar Filter State</div>
+      <div class="lgnd-row"><div style="width:36px;height:18px;border:1.5px solid var(--purple);border-radius:4px;background:#f5f4ff;flex-shrink:0"></div><span class="lgnd-def">Purple border = filter is <b>active</b> (data is narrowed)</span></div>
+      <div class="lgnd-row"><div style="width:36px;height:18px;border:1px solid var(--line);border-radius:4px;background:var(--card);flex-shrink:0"></div><span class="lgnd-def">Normal border = filter is <b>off</b> (showing all)</span></div>
     </div>
 
     <!-- NADI Category -->
