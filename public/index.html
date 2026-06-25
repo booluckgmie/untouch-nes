@@ -249,6 +249,38 @@ table.t-wk thead tr:nth-child(3) th{position:sticky;top:52px;z-index:3;backgroun
 /* KPI tooltip */
 .kpi[title]{cursor:help}
 .kpi[title]:hover{border-color:var(--purple)}
+/* LEGEND MODAL */
+.lgnd-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:400}
+.lgnd-overlay.open{display:block}
+.lgnd-modal{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  z-index:401;background:var(--card);border:1px solid var(--line);border-radius:12px;
+  width:540px;max-width:calc(100vw - 32px);max-height:82vh;
+  box-shadow:0 8px 32px rgba(0,0,0,.18);flex-direction:column;overflow:hidden}
+.lgnd-modal.open{display:flex}
+.lgnd-hdr{display:flex;justify-content:space-between;align-items:center;
+  padding:13px 18px;border-bottom:1px solid var(--line);flex-shrink:0;gap:10px}
+.lgnd-hdr-title{font-size:14px;font-weight:700}
+.lgnd-hdr-sub{font-size:10px;color:var(--t3);margin-top:2px}
+.lgnd-close{border:none;background:none;cursor:pointer;font-size:15px;color:var(--t3);
+  padding:3px 7px;border-radius:4px;line-height:1;flex-shrink:0}
+.lgnd-close:hover{background:var(--bg);color:var(--t1)}
+.lgnd-body{overflow-y:auto;padding:16px 18px 20px;display:grid;grid-template-columns:1fr 1fr;gap:16px 20px}
+.lgnd-sec{display:flex;flex-direction:column;gap:6px}
+.lgnd-sec.full{grid-column:1/-1}
+.lgnd-sec-title{font-size:9.5px;font-weight:700;color:var(--t3);text-transform:uppercase;
+  letter-spacing:.6px;padding-bottom:5px;border-bottom:1px solid var(--line2);margin-bottom:2px}
+.lgnd-row{display:flex;align-items:center;gap:8px;min-height:20px}
+.lgnd-def{font-size:11px;color:var(--t2);line-height:1.4;flex:1}
+.lgnd-abbr{font-size:10.5px;font-weight:700;color:var(--t1);min-width:54px;font-variant-numeric:tabular-nums}
+.lgnd-sym{font-size:13px;font-weight:700;min-width:28px;color:var(--t1);text-align:center;letter-spacing:2px}
+.lgnd-swatch{width:12px;height:12px;border-radius:2px;flex-shrink:0}
+/* Sidebar legend trigger */
+.sb-footer{padding:6px 8px 8px;border-top:1px solid var(--line2);flex-shrink:0}
+.lgnd-btn{display:flex;align-items:center;justify-content:center;gap:5px;width:100%;
+  padding:5px 8px;font-size:11px;border:1px solid var(--line);border-radius:6px;
+  background:none;cursor:pointer;color:var(--t3);transition:all .15s}
+.lgnd-btn:hover{border-color:var(--purple);color:var(--purple);background:#f5f4ff}
+@media(max-width:600px){.lgnd-body{grid-template-columns:1fr}.lgnd-sec.full{grid-column:1}}
 </style>
 </head>
 <body>
@@ -289,10 +321,117 @@ table.t-wk thead tr:nth-child(3) th{position:sticky;top:52px;z-index:3;backgroun
     <div class="sb-div"></div>
     <div class="sb-label">NADI2U</div><div id="nav2u"></div>
   </div>
+  <div class="sb-footer">
+    <button class="lgnd-btn" onclick="openLegend()">? Legend &amp; Definitions</button>
+  </div>
 </aside>
 <main class="main" id="main">
   <div class="state-box"><div class="icon">⏳</div><p>Loading…</p></div>
 </main>
+</div>
+<div class="lgnd-overlay" id="lgndOv" onclick="closeLegend()"></div>
+<div class="lgnd-modal" id="lgndModal">
+  <div class="lgnd-hdr">
+    <div><div class="lgnd-hdr-title">Legend &amp; Definitions</div><div class="lgnd-hdr-sub">Symbols, status tags, colours, and column abbreviations used in this dashboard</div></div>
+    <button class="lgnd-close" onclick="closeLegend()">✕</button>
+  </div>
+  <div class="lgnd-body">
+
+    <!-- NADI Site Status -->
+    <div class="lgnd-sec">
+      <div class="lgnd-sec-title">NADI Site Status</div>
+      <div class="lgnd-row"><span class="pill p-g">Active</span><span class="lgnd-def">All programs running — ≥ 3 events in the quarter</span></div>
+      <div class="lgnd-row"><span class="pill p-y">Partial</span><span class="lgnd-def">Some programs active, not all have events</span></div>
+      <div class="lgnd-row"><span class="pill p-r">Untouched</span><span class="lgnd-def">Fewer than 3 events recorded — site inactive</span></div>
+      <div class="lgnd-row"><div class="lgnd-swatch" style="background:#fff4f4;border:1px solid #f5c6c6"></div><span class="lgnd-def">Row tinted red = Untouched NADI site</span></div>
+    </div>
+
+    <!-- Event Attendance Status -->
+    <div class="lgnd-sec">
+      <div class="lgnd-sec-title">Event Attendance</div>
+      <div class="lgnd-row"><div class="lgnd-swatch" style="background:var(--cc)"></div><span class="lgnd-def"><b>Complete</b> — attendance met or exceeded target</span></div>
+      <div class="lgnd-row"><div class="lgnd-swatch" style="background:var(--pc)"></div><span class="lgnd-def"><b>Partial</b> — some attendees, below target</span></div>
+      <div class="lgnd-row"><div class="lgnd-swatch" style="background:var(--rc)"></div><span class="lgnd-def"><b>Zero</b> — 0 attendees recorded</span></div>
+      <div class="lgnd-row"><span class="lgnd-sym" style="color:var(--cc)">✓</span><span class="lgnd-def">Attendance met target (complete event)</span></div>
+    </div>
+
+    <!-- Monthly Heat Map -->
+    <div class="lgnd-sec">
+      <div class="lgnd-sec-title">Monthly Events Heat Map</div>
+      <div class="lgnd-row"><div class="lgnd-swatch" style="background:var(--line2);border:1px solid var(--line)"></div><span class="lgnd-def">· &nbsp; 0 events this month</span></div>
+      <div class="lgnd-row"><div class="lgnd-swatch h1"></div><span class="lgnd-def">1 – 5 events</span></div>
+      <div class="lgnd-row"><div class="lgnd-swatch h2"></div><span class="lgnd-def">6 – 20 events</span></div>
+      <div class="lgnd-row"><div class="lgnd-swatch h3"></div><span class="lgnd-def">21 – 99 events</span></div>
+      <div class="lgnd-row"><div class="lgnd-swatch h4"></div><span class="lgnd-def">100 + events</span></div>
+    </div>
+
+    <!-- Program Activity Dots -->
+    <div class="lgnd-sec">
+      <div class="lgnd-sec-title">Program Activity Dots</div>
+      <div class="lgnd-row"><div class="pdot" style="background:var(--purple)"></div><span class="lgnd-def">Program <b>active</b> at this NADI (has events)</span></div>
+      <div class="lgnd-row"><div class="pdot" style="background:var(--line)"></div><span class="lgnd-def">Program <b>inactive</b> — no events recorded</span></div>
+      <div class="lgnd-row" style="margin-top:2px"><span class="lgnd-def" style="font-size:10px;color:var(--t3)">Each dot represents one program/sub-pillar in the active module</span></div>
+    </div>
+
+    <!-- Column Abbreviations -->
+    <div class="lgnd-sec full">
+      <div class="lgnd-sec-title">Column Abbreviations</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px">
+        <div class="lgnd-row"><span class="lgnd-abbr">Ev. / Ev</span><span class="lgnd-def">Number of sessions / events held</span></div>
+        <div class="lgnd-row"><span class="lgnd-abbr">Pax</span><span class="lgnd-def">Participants — total attendees across events</span></div>
+        <div class="lgnd-row"><span class="lgnd-abbr">Zero</span><span class="lgnd-def">Events with 0 attendees</span></div>
+        <div class="lgnd-row"><span class="lgnd-abbr">Part.</span><span class="lgnd-def">Events with partial attendance</span></div>
+        <div class="lgnd-row"><span class="lgnd-abbr">Compl.</span><span class="lgnd-def">Events where attendance met target</span></div>
+        <div class="lgnd-row"><span class="lgnd-abbr">Wks</span><span class="lgnd-def">Weeks with at least one event recorded</span></div>
+        <div class="lgnd-row"><span class="lgnd-abbr">TP</span><span class="lgnd-def">Technical Partner — implementing company</span></div>
+        <div class="lgnd-row"><span class="lgnd-abbr">DUSP</span><span class="lgnd-def">Digital Utility Service Provider (TM / MAXIS / CELCOMDIGI / REDTONE)</span></div>
+        <div class="lgnd-row"><span class="lgnd-abbr">Ref ID</span><span class="lgnd-def">MCMC official reference code for the NADI centre</span></div>
+        <div class="lgnd-row"><span class="lgnd-abbr"># (row)</span><span class="lgnd-def">Sequential rank in the current filtered view</span></div>
+      </div>
+    </div>
+
+    <!-- NADI Category -->
+    <div class="lgnd-sec">
+      <div class="lgnd-sec-title">NADI Category</div>
+      <div class="lgnd-row"><span class="cat-4u">NADI4U</span><span class="lgnd-def">Urban / semi-urban NADI centres</span></div>
+      <div class="lgnd-row"><span class="cat-2u">NADI2U</span><span class="lgnd-def">Rural / mobile NADI 2.0 centres</span></div>
+    </div>
+
+    <!-- General Symbols -->
+    <div class="lgnd-sec">
+      <div class="lgnd-sec-title">General Symbols</div>
+      <div class="lgnd-row"><span class="lgnd-sym">·</span><span class="lgnd-def">No data or zero value in this cell</span></div>
+      <div class="lgnd-row"><span class="lgnd-sym">—</span><span class="lgnd-def">Data not available</span></div>
+      <div class="lgnd-row"><span class="lgnd-sym">↑↓</span><span class="lgnd-def">Column sorted ascending / descending</span></div>
+      <div class="lgnd-row"><span class="lgnd-sym">↻</span><span class="lgnd-def">Data auto-refreshes hourly</span></div>
+    </div>
+
+    <!-- LL Pillars full-width -->
+    <div class="lgnd-sec full">
+      <div class="lgnd-sec-title">Lifelong Learning (LL) Pillars &amp; Sub-programs</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 12px">
+        <div style="padding:8px 10px;border-radius:7px;border:1px solid #4c44b020;background:#4c44b008">
+          <div style="font-size:10px;font-weight:700;color:#4c44b0;margin-bottom:5px">NURTURE</div>
+          <div style="font-size:10.5px;color:var(--t2);line-height:1.8">CYBERSECURITY<br>EKELAS<br>TUISYEN RAKYAT</div>
+        </div>
+        <div style="padding:8px 10px;border-radius:7px;border:1px solid #0b757520;background:#0b757508">
+          <div style="font-size:10px;font-weight:700;color:#0b7575;margin-bottom:5px">SKILLFORGE</div>
+          <div style="font-size:10.5px;color:var(--t2);line-height:1.8">ESPORT<br>MAHIR</div>
+        </div>
+        <div style="padding:8px 10px;border-radius:7px;border:1px solid #0b7a5820;background:#0b7a5808">
+          <div style="font-size:10px;font-weight:700;color:#0b7a58;margin-bottom:5px">TINYTECHIES</div>
+          <div style="font-size:10.5px;color:var(--t2);line-height:1.8">TINYTECHIES</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Activity Threshold -->
+    <div class="lgnd-sec full">
+      <div class="lgnd-sec-title">Activity Threshold</div>
+      <div class="lgnd-row"><span class="lgnd-def">A NADI site is classified as <b>Active</b> when it has recorded ≥ 3 events per quarter. When a date range covers multiple quarters the threshold scales accordingly: <b>3 × number of quarters</b> in the selected period. Sites below this threshold are marked <b>Untouched</b> (no programs active) or <b>Partial</b> (some programs active).</span></div>
+    </div>
+
+  </div>
 </div>
 <div class="overlay" id="ov2" onclick="closePanel()"></div>
 <div class="panel" id="panel">
@@ -318,6 +457,15 @@ function closeSb(){
   document.querySelector('.sb').classList.remove('open');
   const bd=document.getElementById('sbBd');if(bd)bd.classList.remove('open');
 }
+function openLegend(){
+  document.getElementById('lgndOv').classList.add('open');
+  document.getElementById('lgndModal').classList.add('open');
+}
+function closeLegend(){
+  document.getElementById('lgndOv').classList.remove('open');
+  document.getElementById('lgndModal').classList.remove('open');
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeLegend();});
 
 function _normDusp(tp){const _m={'MSD':'TM','NERA-Maxis':'MAXIS','ETD MAKMUR':'MAXIS','SD':'MAXIS','SAMUDRA':'MAXIS','PERWIRA':'MAXIS','CITAGLOBAL':'MAXIS','AFIINTRA':'MAXIS','NERA-CelcomDigi':'CELCOMDIGI','CCM':'CELCOMDIGI','PERAGOLD':'CELCOMDIGI','OSS':'CELCOMDIGI','RedTone TP':'REDTONE'};return _m[String(tp||'').trim()]||'TM';}
 
