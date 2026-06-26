@@ -13,8 +13,17 @@ if _env.exists():
             _k, _, _v = _line.partition("=")
             os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
 
-DB_HOST     = os.environ.get("DB_HOST",     "43.217.146.116")
+def _require(key: str) -> str:
+    v = os.environ.get(key, "").strip()
+    if not v:
+        raise RuntimeError(
+            f"Required environment variable {key!r} is not set. "
+            "Add it to your .env file or export it in your shell."
+        )
+    return v
+
+DB_HOST     = _require("DB_HOST")
 DB_PORT     = int(os.environ.get("DB_PORT", "5432"))
-DB_USER     = os.environ.get("DB_USER",     "postgres.rc1vzzw53e9mcc2luokr")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
-DB_NAME     = os.environ.get("DB_NAME",     "postgres")
+DB_USER     = _require("DB_USER")
+DB_PASSWORD = _require("DB_PASSWORD")
+DB_NAME     = os.environ.get("DB_NAME", "postgres")

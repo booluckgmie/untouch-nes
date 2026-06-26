@@ -7,12 +7,14 @@ from tqdm import tqdm
 
 _ILLEGAL_CHARS = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
 
+from credential import DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+
 PG_CONFIG = {
-    "host": "43.217.146.116",
-    "port": 5432,
-    "user": "postgres.rc1vzzw53e9mcc2luokr",
-    "password": "QAAjdrBjpSjuBLmMpV76",
-    "database": "postgres",
+    "host":     DB_HOST,
+    "port":     DB_PORT,
+    "user":     DB_USER,
+    "password": DB_PASSWORD,
+    "database": DB_NAME,
 }
 
 # ── Subcategory IDs ────────────────────────────────────────────────────────────

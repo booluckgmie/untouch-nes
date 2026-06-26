@@ -12,6 +12,7 @@ No date filtering. All categories. All subcategories.
 """
 
 import re
+import sys
 import time
 import traceback
 from datetime import date
@@ -25,13 +26,16 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from tqdm import tqdm
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from credential import DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+
 # ── Connection ────────────────────────────────────────────────────────────────
 PG_CONFIG = {
-    "host":     "43.217.146.116",
-    "port":     5432,
-    "user":     "postgres.rc1vzzw53e9mcc2luokr",
-    "password": "QAAjdrBjpSjuBLmMpV76",
-    "database": "postgres",
+    "host":     DB_HOST,
+    "port":     DB_PORT,
+    "user":     DB_USER,
+    "password": DB_PASSWORD,
+    "database": DB_NAME,
 }
 
 # ── Tuning ────────────────────────────────────────────────────────────────────
