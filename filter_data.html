@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NES Data Filter</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
+
+  header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; padding: 18px 32px; display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 1.3rem; font-weight: 600; flex: 1; }
+  header .file-tag { font-size: 0.78rem; color: #90cdf4; background: rgba(255,255,255,.08); padding: 4px 10px; border-radius: 20px; white-space: nowrap; }
+
+  .container { max-width: 1500px; margin: 0 auto; padding: 20px 18px; }
+
+  /* Loading overlay */
+  #loading {
+    position: fixed; inset: 0; background: rgba(26,26,46,.7);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 999; color: #fff; gap: 16px;
+  }
+  #loading.hidden { display: none; }
+  .spinner { width: 44px; height: 44px; border: 4px solid rgba(255,255,255,.2); border-top-color: #63b3ed; border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading p { font-size: 1rem; opacity: .9; }
+  #loading small { font-size: 0.8rem; opacity: .6; }
+
+  /* Error */
+  #error-bar { background: #fed7d7; color: #822727; padding: 12px 20px; border-radius: 8px; margin-bottom: 16px; display: none; font-size: 0.85rem; }
+
+  /* Stats */
+  .stats { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+  .stat-card { background: #fff; border-radius: 10px; padding: 12px 18px; flex: 1; min-width: 130px; border: 1px solid #e2e8f0; }
+  .stat-card .val { font-size: 1.55rem; font-weight: 700; color: #2b6cb0; }
+  .stat-card .lbl { font-size: 0.72rem; color: #718096; text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; }
+
+  /* Filters */
+  .filters { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 18px 22px; margin-bottom: 16px; }
+  .filters-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0; }
+  .filters-header h3 { font-size: 0.9rem; font-weight: 600; color: #2d3748; }
+  .filters-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(195px, 1fr)); gap: 10px; }
+  .filter-group label { display: block; font-size: 0.72rem; font-weight: 600; color: #4a5568; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+  .filter-group select, .filter-group input {
+    width: 100%; padding: 6px 9px; border: 1px solid #e2e8f0; border-radius: 6px;
+    font-size: 0.83rem; background: #f7fafc; color: #2d3748; outline: none; transition: border-color .15s;
+  }
+  .filter-group select:focus, .filter-group input:focus { border-color: #4299e8; background: #fff; }
+  .date-range { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+  /* Actions */
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  .btn { padding: 8px 18px; border-radius: 7px; border: none; cursor: pointer; font-size: 0.83rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: all .15s; }
+  .btn-success   { background: #276749; color: #fff; }
+  .btn-success:hover   { background: #22543d; }
+  .btn-secondary { background: #e2e8f0; color: #4a5568; }
+  .btn-secondary:hover { background: #cbd5e0; }
+  .btn-info      { background: #2b6cb0; color: #fff; }
+  .btn-info:hover      { background: #2c5282; }
+  .btn:disabled  { opacity: .45; cursor: not-allowed; }
+  .result-count  { font-size: 0.83rem; color: #718096; margin-left: auto; }
+
+  /* Column selector */
+  .col-selector { background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; padding: 14px 18px; margin-bottom: 16px; }
+  .col-selector h4 { font-size: 0.83rem; font-weight: 600; color: #4a5568; margin-bottom: 8px; }
+  .col-checkboxes { display: flex; flex-wrap: wrap; gap: 6px; }
+  .col-check { display: inline-flex; align-items: center; gap: 4px; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 5px; padding: 3px 9px; font-size: 0.72rem; cursor: pointer; transition: all .12s; }
+  .col-check:hover { border-color: #4299e8; background: #ebf8ff; }
+
+  /* Table */
+  .table-wrapper { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; }
+  .table-scroll  { overflow: auto; max-height: 540px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  thead { position: sticky; top: 0; z-index: 10; }
+  thead th { background: #2d3748; color: #e2e8f0; padding: 9px 11px; font-weight: 600; text-align: left; white-space: nowrap; border-right: 1px solid #4a5568; }
+  thead th:last-child { border-right: none; }
+  tbody tr:nth-child(even) { background: #f7fafc; }
+  tbody tr:hover { background: #ebf8ff; }
+  tbody td { padding: 7px 11px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 99px; font-size: 0.68rem; font-weight: 600; }
+  .badge-4u { background: #bee3f8; color: #2c5282; }
+  .badge-2u { background: #c6f6d5; color: #276749; }
+  .badge-ot { background: #feebc8; color: #c05621; }
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p>Loading data…</p>
+  <small id="load-detail">Fetching CSV from server</small>
+</div>
+
+<header>
+  <h1>NES Data Filter &amp; Export</h1>
+  <span class="file-tag" id="file-tag">—</span>
+</header>
+
+<div class="container">
+  <div id="error-bar"></div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card"><div class="val" id="stat-total">—</div><div class="lbl">Total Rows</div></div>
+    <div class="stat-card"><div class="val" id="stat-filtered">—</div><div class="lbl">Filtered</div></div>
+    <div class="stat-card"><div class="val" id="stat-pax">—</div><div class="lbl">Unique Pax</div></div>
+    <div class="stat-card"><div class="val" id="stat-events">—</div><div class="lbl">Events</div></div>
+    <div class="stat-card"><div class="val" id="stat-nadi">—</div><div class="lbl">NADI</div></div>
+    <div class="stat-card"><div class="val" id="stat-states">—</div><div class="lbl">States</div></div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters">
+    <div class="filters-header">
+      <h3>Filters</h3>
+      <button class="btn btn-secondary" onclick="clearFilters()">Clear All</button>
+    </div>
+    <div class="filters-grid">
+      <div class="filter-group">
+        <label>Category</label>
+        <select id="f-category" onchange="cascadeFilters('category'); applyFilters()"><option value="">All</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Pillar</label>
+        <select id="f-pillar" onchange="cascadeFilters('pillar'); applyFilters()"><option value="">All</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Sub-Pillar</label>
+        <select id="f-sub-pillar" onchange="cascadeFilters('sub_pillar'); applyFilters()"><option value="">All</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Deeper Sub-Pillar</label>
+        <select id="f-deeper" onchange="applyFilters()"><option value="">All</option></select>
+      </div>
+      <div class="filter-group">
+        <label>TP</label>
+        <select id="f-tp" onchange="applyFilters()"><option value="">All</option></select>
+      </div>
+      <div class="filter-group">
+        <label>DUSP</label>
+        <select id="f-dusp" onchange="applyFilters()"><option value="">All</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Phase</label>
+        <select id="f-phase" onchange="applyFilters()"><option value="">All</option></select>
+      </div>
+      <div class="filter-group">
+        <label>State</label>
+        <select id="f-state" onchange="applyFilters()"><option value="">All</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Gender</label>
+        <select id="f-gender" onchange="applyFilters()"><option value="">All</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Participant Type</label>
+        <select id="f-ptype" onchange="applyFilters()"><option value="">All</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Date Range</label>
+        <div class="date-range">
+          <input type="date" id="f-date-from" onchange="applyFilters()">
+          <input type="date" id="f-date-to"   onchange="applyFilters()">
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>Search (Name / NADI / Program)</label>
+        <input type="text" id="f-search" oninput="applyFilters()" placeholder="Type to search…">
+      </div>
+    </div>
+  </div>
+
+  <!-- Column selector -->
+  <div class="col-selector">
+    <h4>Export columns</h4>
+    <div class="col-checkboxes" id="col-checkboxes"></div>
+  </div>
+
+  <!-- Actions -->
+  <div class="actions">
+    <button class="btn btn-success" onclick="downloadCSV(false)">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+      </svg>
+      Download Selected Columns
+    </button>
+    <button class="btn btn-info" onclick="downloadCSV(true)">Download All Columns</button>
+    <button class="btn btn-secondary" onclick="location.reload()">Reload Data</button>
+    <span class="result-count" id="result-count"></span>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrapper">
+    <div class="table-scroll">
+      <table id="data-table">
+        <thead id="table-head"></thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── State ─────────────────────────────────────────────────────────────────── */
+let rawData      = [];
+let headers      = [];
+let filteredData = [];
+let visibleCols  = new Set();
+
+const PRIORITY = [
+  "category_name","pillar_name","sub_pillar_name","deeper_sub_pillar","program_name",
+  "participant_name","identity_no","gender_name","participant_type",
+  "site_state","site_name","site_tp","site_dusp","site_phase",
+  "event_startdate","event_year","event_quarter","event_month_name",
+  "event_duration_hours","attendance"
+];
+
+/* ── Boot: fetch CSV from server ───────────────────────────────────────────── */
+async function boot() {
+  try {
+    // Get filename info
+    let fileName = "nes_all_data.csv";
+    try {
+      const info = await fetch("/info").then(r => r.json());
+      if (info.name) fileName = info.name;
+    } catch {}
+    document.getElementById("file-tag").textContent = fileName;
+    document.getElementById("load-detail").textContent = `Parsing ${fileName}…`;
+
+    const resp = await fetch("/data");
+    if (!resp.ok) throw new Error(`Server returned ${resp.status}: ${resp.statusText}`);
+
+    const text = await resp.text();
+    document.getElementById("load-detail").textContent = "Parsing CSV…";
+
+    // Defer parse off main thread feel
+    await new Promise(r => setTimeout(r, 10));
+    const { headers: hdrs, rows } = parseCSV(text);
+
+    if (!hdrs.length || !rows.length) throw new Error("CSV is empty or unreadable");
+
+    headers = hdrs;
+    rawData = rows;
+
+    buildFilters();
+    buildColSelector();
+    applyFilters();
+    document.getElementById("loading").classList.add("hidden");
+  } catch (err) {
+    document.getElementById("loading").classList.add("hidden");
+    const bar = document.getElementById("error-bar");
+    bar.textContent = `Error: ${err.message}. Make sure you ran: python serve.py`;
+    bar.style.display = "block";
+  }
+}
+
+/* ── CSV parser ────────────────────────────────────────────────────────────── */
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/);
+  if (lines.length < 2) return { headers: [], rows: [] };
+
+  function parseLine(line) {
+    const cells = []; let cur = ""; let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+        else inQ = !inQ;
+      } else if (ch === ',' && !inQ) { cells.push(cur); cur = ""; }
+      else cur += ch;
+    }
+    cells.push(cur);
+    return cells;
+  }
+
+  // Strip UTF-8 BOM
+  const firstLine = lines[0].replace(/^﻿/, "");
+  const hdrs = parseLine(firstLine);
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const ln = lines[i].trim();
+    if (!ln) continue;
+    const vals = parseLine(ln);
+    const obj  = {};
+    hdrs.forEach((h, idx) => { obj[h] = vals[idx] !== undefined ? vals[idx] : ""; });
+    rows.push(obj);
+  }
+  return { headers: hdrs, rows };
+}
+
+/* ── Filter dropdowns ──────────────────────────────────────────────────────── */
+function uniq(arr) { return [...new Set(arr.filter(v => v))].sort(); }
+
+function populateSelect(id, values, keepCurrent = false) {
+  const sel = document.getElementById(id);
+  const cur = keepCurrent ? sel.value : "";
+  while (sel.options.length > 1) sel.remove(1);
+  values.forEach(v => {
+    const o = document.createElement("option");
+    o.value = o.textContent = v;
+    sel.appendChild(o);
+  });
+  if (keepCurrent && [...sel.options].some(o => o.value === cur)) sel.value = cur;
+}
+
+function buildFilters() {
+  populateSelect("f-category",  uniq(rawData.map(r => r["category_name"])));
+  populateSelect("f-pillar",    uniq(rawData.map(r => r["pillar_name"])));
+  populateSelect("f-sub-pillar",uniq(rawData.map(r => r["sub_pillar_name"])));
+  populateSelect("f-deeper",    uniq(rawData.map(r => r["deeper_sub_pillar"])));
+  populateSelect("f-tp",        uniq(rawData.map(r => r["site_tp"])));
+  populateSelect("f-dusp",      uniq(rawData.map(r => r["site_dusp"])));
+  populateSelect("f-phase",     uniq(rawData.map(r => r["site_phase"])));
+  populateSelect("f-state",     uniq(rawData.map(r => r["site_state"])));
+  populateSelect("f-gender",    uniq(rawData.map(r => r["gender_name"])));
+  populateSelect("f-ptype",     uniq(rawData.map(r => r["participant_type"])));
+
+  const dates = rawData.map(r => r["event_startdate"]).filter(Boolean).sort();
+  if (dates.length) {
+    document.getElementById("f-date-from").value = dates[0];
+    document.getElementById("f-date-to").value   = dates[dates.length - 1];
+  }
+}
+
+// Cascade: narrow downstream dropdowns based on upstream filter
+function cascadeFilters(level) {
+  const cat      = document.getElementById("f-category").value;
+  const pillar   = document.getElementById("f-pillar").value;
+  const subPillar= document.getElementById("f-sub-pillar").value;
+
+  let pool = rawData;
+  if (cat)      pool = pool.filter(r => r["category_name"]  === cat);
+  if (level !== "category" && pillar)
+                pool = pool.filter(r => r["pillar_name"]     === pillar);
+  if (level !== "category" && level !== "pillar" && subPillar)
+                pool = pool.filter(r => r["sub_pillar_name"] === subPillar);
+
+  if (level === "category") {
+    populateSelect("f-pillar",    uniq(pool.map(r => r["pillar_name"])),     true);
+    populateSelect("f-sub-pillar",uniq(pool.map(r => r["sub_pillar_name"])), true);
+    populateSelect("f-deeper",    uniq(pool.map(r => r["deeper_sub_pillar"])),true);
+  } else if (level === "pillar") {
+    populateSelect("f-sub-pillar",uniq(pool.map(r => r["sub_pillar_name"])), true);
+    populateSelect("f-deeper",    uniq(pool.map(r => r["deeper_sub_pillar"])),true);
+  } else if (level === "sub_pillar") {
+    populateSelect("f-deeper",    uniq(pool.map(r => r["deeper_sub_pillar"])),true);
+  }
+}
+
+/* ── Column selector ───────────────────────────────────────────────────────── */
+function buildColSelector() {
+  const container = document.getElementById("col-checkboxes");
+  container.innerHTML = "";
+  visibleCols.clear();
+  const ordered = [
+    ...PRIORITY.filter(c => headers.includes(c)),
+    ...headers.filter(c => !PRIORITY.includes(c))
+  ];
+  ordered.forEach(col => {
+    visibleCols.add(col);
+    const label = document.createElement("label");
+    label.className = "col-check";
+    label.innerHTML = `<input type="checkbox" checked value="${col}" onchange="toggleCol('${col}',this.checked)"> ${col}`;
+    container.appendChild(label);
+  });
+}
+
+function toggleCol(col, checked) {
+  checked ? visibleCols.add(col) : visibleCols.delete(col);
+  renderTable(filteredData.slice(0, 200));
+}
+
+/* ── Apply filters ─────────────────────────────────────────────────────────── */
+function applyFilters() {
+  const cat      = document.getElementById("f-category").value;
+  const pillar   = document.getElementById("f-pillar").value;
+  const subP     = document.getElementById("f-sub-pillar").value;
+  const deeper   = document.getElementById("f-deeper").value;
+  const tp       = document.getElementById("f-tp").value;
+  const dusp     = document.getElementById("f-dusp").value;
+  const phase    = document.getElementById("f-phase").value;
+  const state    = document.getElementById("f-state").value;
+  const gender   = document.getElementById("f-gender").value;
+  const ptype    = document.getElementById("f-ptype").value;
+  const dateFrom = document.getElementById("f-date-from").value;
+  const dateTo   = document.getElementById("f-date-to").value;
+  const search   = document.getElementById("f-search").value.toLowerCase().trim();
+
+  filteredData = rawData.filter(r => {
+    if (cat    && r["category_name"]   !== cat)    return false;
+    if (pillar && r["pillar_name"]     !== pillar)  return false;
+    if (subP   && r["sub_pillar_name"] !== subP)    return false;
+    if (deeper && r["deeper_sub_pillar"] !== deeper) return false;
+    if (tp     && r["site_tp"]         !== tp)      return false;
+    if (dusp   && r["site_dusp"]       !== dusp)    return false;
+    if (phase  && r["site_phase"]      !== phase)   return false;
+    if (state  && r["site_state"]      !== state)   return false;
+    if (gender && r["gender_name"]     !== gender)  return false;
+    if (ptype  && r["participant_type"]!== ptype)   return false;
+    const d = r["event_startdate"] || "";
+    if (dateFrom && d && d < dateFrom) return false;
+    if (dateTo   && d && d > dateTo)   return false;
+    if (search) {
+      const hay = [
+        r["participant_name"], r["site_name"], r["program_name"],
+        r["sub_pillar_name"],  r["deeper_sub_pillar"]
+      ].join(" ").toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
+  updateStats();
+  renderTable(filteredData.slice(0, 200));
+  document.getElementById("result-count").textContent =
+    `Showing ${Math.min(200, filteredData.length).toLocaleString()} of ${filteredData.length.toLocaleString()} rows`;
+}
+
+function clearFilters() {
+  ["f-category","f-pillar","f-sub-pillar","f-deeper","f-tp","f-dusp",
+   "f-phase","f-state","f-gender","f-ptype"].forEach(id => {
+    document.getElementById(id).value = "";
+  });
+  document.getElementById("f-date-from").value = "";
+  document.getElementById("f-date-to").value   = "";
+  document.getElementById("f-search").value    = "";
+  buildFilters();
+  applyFilters();
+}
+
+/* ── Stats ─────────────────────────────────────────────────────────────────── */
+function updateStats() {
+  const fd = filteredData;
+  document.getElementById("stat-total").textContent    = rawData.length.toLocaleString();
+  document.getElementById("stat-filtered").textContent = fd.length.toLocaleString();
+  document.getElementById("stat-pax").textContent      = new Set(fd.map(r=>r["participant_id"]).filter(Boolean)).size.toLocaleString();
+  document.getElementById("stat-events").textContent   = new Set(fd.map(r=>r["event_id"]).filter(Boolean)).size.toLocaleString();
+  document.getElementById("stat-nadi").textContent     = new Set(fd.map(r=>r["site_name"]).filter(Boolean)).size.toLocaleString();
+  document.getElementById("stat-states").textContent   = new Set(fd.map(r=>r["site_state"]).filter(Boolean)).size.toLocaleString();
+}
+
+/* ── Render table ──────────────────────────────────────────────────────────── */
+function renderTable(rows) {
+  const cols = [
+    ...PRIORITY.filter(c => headers.includes(c) && visibleCols.has(c)),
+    ...headers.filter(c => !PRIORITY.includes(c) && visibleCols.has(c))
+  ];
+  const badgeClass = v => v.includes("4U") ? "badge-4u" : v.includes("2U") ? "badge-2u" : "badge-ot";
+
+  document.getElementById("table-head").innerHTML =
+    "<tr>" + cols.map(c => `<th>${c}</th>`).join("") + "</tr>";
+
+  document.getElementById("table-body").innerHTML = rows.map(row =>
+    "<tr>" + cols.map(col => {
+      let v = row[col] ?? "";
+      if (col === "category_name" && v)
+        v = `<span class="badge ${badgeClass(v)}">${v}</span>`;
+      return `<td title="${String(v).replace(/"/g,'&quot;')}">${v}</td>`;
+    }).join("") + "</tr>"
+  ).join("");
+}
+
+/* ── Download ──────────────────────────────────────────────────────────────── */
+function downloadCSV(allCols) {
+  const cols = allCols
+    ? headers
+    : [
+        ...PRIORITY.filter(c => headers.includes(c) && visibleCols.has(c)),
+        ...headers.filter(c => !PRIORITY.includes(c) && visibleCols.has(c))
+      ];
+
+  const esc = v => {
+    const s = String(v ?? "");
+    return s.includes(",") || s.includes('"') || s.includes("\n")
+      ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+
+  const lines = [cols.map(esc).join(",")];
+  filteredData.forEach(r => lines.push(cols.map(c => esc(r[c] ?? "")).join(",")));
+
+  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+  const a    = document.createElement("a");
+  a.href     = URL.createObjectURL(blob);
+  const d    = new Date();
+  const tag  = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
+  a.download = `nes_filtered_${tag}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ── Start ─────────────────────────────────────────────────────────────────── */
+boot();
+</script>
+</body>
+</html>
