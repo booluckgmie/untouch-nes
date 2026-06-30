@@ -1118,7 +1118,7 @@ function renderMonthly(d){
     <div class="content" style="padding-top:0">
       <div class="toolbar">
         <input id="mq" placeholder="Search NADI name or ref…" oninput="fM()">
-        <select id="msf" onchange="fM()"><option value="">All NADI</option><option value="a">Active only</option><option value="u">Untouched only</option></select>
+        <select id="msf" onchange="fM()"><option value="">All NADI</option><option value="a">Touched only</option><option value="u">Untouched only</option></select>
         <button class="dl-btn" onclick="dlM()" title="Export monthly data to Excel">⬇ Export</button>
         <span class="fc" id="mfc"></span>
       </div>
@@ -1283,7 +1283,8 @@ function fM(){
     const ev=(((aMap[r.i]||{}).pr||{})[String(pi)]||{}).ev||[];
     const evCount=dataMonthIdx!==null?(ev[dataMonthIdx]||0):(mi?mi.reduce((s,j)=>s+(ev[j]||0),0):ev.reduce((s,v)=>s+(v||0),0));
     if(sf==='u')return evCount<3;
-    return evCount>0;
+    if(sf==='a')return evCount>=3;
+    return true;
   };
   const fF=f.filter(_spFilter);
   window._filteredRows=fF;
@@ -2264,7 +2265,7 @@ function renderQuarterly(d){
     <div class="content" style="padding-top:0">
       <div class="toolbar">
         <input id="qq" placeholder="Search NADI name or ref…" oninput="fQ()">
-        <select id="qsf" onchange="fQ()"><option value="">All NADI</option><option value="a">Active only (≥3 ev)</option><option value="u">Untouched only (&lt;3 ev)</option></select>
+        <select id="qsf" onchange="fQ()"><option value="">All NADI</option><option value="a">Touched only (≥3 ev)</option><option value="u">Untouched only (&lt;3 ev)</option></select>
         <button class="dl-btn" onclick="dlQ()" title="Export quarterly report as CSV">⬇ Export</button>
         <span class="fc" id="qfc"></span>
       </div>
