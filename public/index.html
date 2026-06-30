@@ -1202,6 +1202,26 @@ function fM(){
   let _cs=document.getElementById('_prog-col-css');
   if(!_cs){_cs=document.createElement('style');_cs.id='_prog-col-css';document.head.appendChild(_cs);}
   _cs.textContent=sp!==''?`[data-pi]:not([data-pi="${sp}"]){display:none}`:'';
+  // Pillar-mode thead fix: [data-pl] pillar headers (row 1) have no [data-pi] so the CSS rule
+  // above never hides them. Their full colspan leaves transparent gaps in rows 2–3 that body
+  // rows scroll through. Fix: hide other pillars and shrink the selected pillar's colspan to 2.
+  const _mPillars=window._mPillars,_mPiToPl=window._mPiToPl||{};
+  const _mThead=document.querySelector('#mTable thead');
+  if(_mThead&&_mPillars){
+    const spPl=sp!==''?_mPiToPl[+sp]:undefined;
+    _mThead.querySelectorAll('th[data-pl]:not([data-pi])').forEach(th=>{
+      const pl=+th.dataset.pl;
+      if(sp===''){
+        th.style.display='';
+        th.setAttribute('colspan',String(_mPillars[pl].pis.length*2));
+      } else if(pl!==spPl){
+        th.style.display='none';
+      } else {
+        th.style.display='';
+        th.setAttribute('colspan','2');
+      }
+    });
+  }
 
   const mi=_filteredMI;
   const dataMonthIdx=selMonth!==null?(mi?mi[selMonth]:selMonth):null;
