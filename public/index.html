@@ -1246,8 +1246,8 @@ function fM(){
           rowEv=activeMI.reduce((s,j)=>s+((a.tot[j]||0)),0);
         }
       }
-      if(sf==='u'&&rowEv>3)return false;
-      if(sf==='a'&&rowEv<=3)return false;
+      if(sf==='u'&&rowEv>=3)return false;
+      if(sf==='a'&&rowEv<3)return false;
     }
     return true;
   });
@@ -2311,7 +2311,7 @@ function fQ(){
       <td><div style="font-weight:${r.qEv?600:400};color:${r.ut?'var(--red)':'var(--t1)'}">${ce(r.nm)}</div><div style="font-size:10px;color:var(--t3)">${r.ref}</div></td>
       <td style="font-size:11px;color:var(--t2)">${ce(r.state)}</td>
       ${progCells}
-      <td style="text-align:center;font-weight:${r.qEv?700:400};color:${r.qEv<3&&r.qEv>0?'var(--amber)':r.qEv===0?'var(--red)':col};border-left:${pillars?'2px solid var(--line)':'none'}">${r.qEv||'—'}</td>
+      <td style="text-align:center;font-weight:${r.qEv?700:400};color:${r.qEv<3&&r.qEv>0?'var(--amber)':r.qEv===0?'var(--red)':col};border-left:${pillars?'2px solid var(--line)':'none'}">${r.qEv!=null?r.qEv:'—'}</td>
       <td style="text-align:center;color:var(--t2)">${r.qPx||'—'}</td>
       <td style="text-align:center">${sp}</td>
     </tr>`;
