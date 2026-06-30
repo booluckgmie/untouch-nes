@@ -1276,12 +1276,14 @@ function fM(){
   displayPis.forEach(pi=>{footEv[pi]=0;footPx[pi]=0;});
   let grandEv=0, grandPx=0, _mActive=0;
 
-  // sp filter: hide rows where selected program has no events
+  // sp filter: hide rows where selected program has no events (untouched mode includes ev=0,1,2)
   const _spFilter=(r)=>{
     if(sp==='')return true;
     const pi=parseInt(sp);
     const ev=(((aMap[r.i]||{}).pr||{})[String(pi)]||{}).ev||[];
-    return dataMonthIdx!==null?(ev[dataMonthIdx]||0)>0:(mi?mi.some(j=>(ev[j]||0)>0):ev.some(v=>v>0));
+    const evCount=dataMonthIdx!==null?(ev[dataMonthIdx]||0):(mi?mi.reduce((s,j)=>s+(ev[j]||0),0):ev.reduce((s,v)=>s+(v||0),0));
+    if(sf==='u')return evCount<3;
+    return evCount>0;
   };
   const fF=f.filter(_spFilter);
   window._filteredRows=fF;
