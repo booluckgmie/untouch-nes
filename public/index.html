@@ -80,32 +80,42 @@ tbody tr:hover td{background:#fafaf9;cursor:pointer}
 tbody tr.sel td{background:#eeedfb}
 /* MONTHLY TABLE */
 table.t-mo{min-width:max-content}
+/* Sticky-header fix: use the separate border model so sticky-cell borders (re-implemented as
+   inset box-shadows below) travel with the translated cell instead of detaching (Cause A). */
+table.t-mo,table.t-wk{border-collapse:separate;border-spacing:0}
+/* Neutralize the generic thead bottom border on data tables — header dividers are drawn via box-shadow. */
+table.t-mo thead th,table.t-wk thead th{border-bottom:none}
+/* Opaque base under body rows so nothing shows through a header seam (Cause C). Applied at the row
+   level so heat (.h1–.h4), .sel, hover and the .ut-row red tint keep winning at the cell level. */
+table.t-mo tbody tr,table.t-wk tbody tr{background:var(--card)}
 /* Monthly table — double header rows */
 table.t-mo thead tr:nth-child(1) th{position:sticky;top:0;z-index:3;background:#fafaf8;white-space:nowrap}
-table.t-mo thead tr:nth-child(2) th{position:sticky;top:26px;z-index:3;background:#f3f2f0;white-space:nowrap;border-bottom:2px solid var(--line)}
+table.t-mo thead tr:nth-child(2) th{position:sticky;z-index:3;background:#f3f2f0;white-space:nowrap;box-shadow:inset 0 -2px 0 var(--line)}
 /* Triple-header (sub-pillar grouping) */
 table.t-mo.t-pillar thead tr:nth-child(1) th{position:sticky;top:0;z-index:3;background:#fafaf8;white-space:nowrap}
-table.t-mo.t-pillar thead tr:nth-child(2) th{position:sticky;top:26px;z-index:3;background:#f3f2f0;white-space:nowrap;border-bottom:none}
-table.t-mo.t-pillar thead tr:nth-child(3) th{position:sticky;top:52px;z-index:3;background:#ece9e4;white-space:nowrap;border-bottom:2px solid var(--line)}
-table.t-mo thead th.f-ref{text-align:left;position:sticky;left:0;z-index:5;background:#fafaf8;min-width:90px;max-width:90px}
-table.t-mo thead th.f-nm {text-align:left;position:sticky;left:90px;z-index:5;background:#fafaf8;min-width:150px;max-width:150px}
-table.t-mo thead th.f-st {text-align:left;position:sticky;left:240px;z-index:5;background:#fafaf8;min-width:90px;max-width:90px;border-right:2px solid var(--line)}
+table.t-mo.t-pillar thead tr:nth-child(2) th{position:sticky;z-index:3;background:#f3f2f0;white-space:nowrap}
+table.t-mo.t-pillar thead tr:nth-child(3) th{position:sticky;z-index:3;background:#ece9e4;white-space:nowrap;box-shadow:inset 0 -2px 0 var(--line)}
+table.t-mo.t-pillar thead tr:nth-child(4) th{position:sticky;z-index:3;background:#ece9e4}
+table.t-mo.t-pillar tbody tr:first-child td{padding-top:10px}
+table.t-mo thead tr:nth-child(1) th.f-ref{text-align:left;position:sticky;left:0;z-index:6;background:#fafaf8;min-width:90px;max-width:90px}
+table.t-mo thead tr:nth-child(1) th.f-nm {text-align:left;position:sticky;left:90px;z-index:6;background:#fafaf8;min-width:150px;max-width:150px}
+table.t-mo thead tr:nth-child(1) th.f-st {text-align:left;position:sticky;left:240px;z-index:6;background:#fafaf8;min-width:90px;max-width:90px;box-shadow:inset -2px 0 0 var(--line)}
 table.t-mo tbody td{text-align:center;padding:5px 6px;white-space:nowrap}
 table.t-mo tbody td.f-ref{text-align:left;position:sticky;left:0;z-index:1;background:var(--card);font-size:10px;color:var(--t3);min-width:90px;max-width:90px}
 table.t-mo tbody td.f-nm {text-align:left;position:sticky;left:90px;z-index:1;background:var(--card);min-width:150px;max-width:150px}
-table.t-mo tbody td.f-st {text-align:left;position:sticky;left:240px;z-index:1;background:var(--card);color:var(--t2);min-width:90px;max-width:90px;border-right:2px solid var(--line2)}
+table.t-mo tbody td.f-st {text-align:left;position:sticky;left:240px;z-index:1;background:var(--card);color:var(--t2);min-width:90px;max-width:90px;box-shadow:inset -2px 0 0 var(--line2)}
 table.t-mo tbody tr:hover td{background:#fafaf9}
 table.t-mo tbody tr:hover td.f-ref,table.t-mo tbody tr:hover td.f-nm,table.t-mo tbody tr:hover td.f-st{background:#fafaf9}
 table.t-mo tbody tr.sel td{background:#eeedfb}
 table.t-mo tbody tr.sel td.f-ref,table.t-mo tbody tr.sel td.f-nm,table.t-mo tbody tr.sel td.f-st{background:#eeedfb}
-table.t-mo tfoot td{position:sticky;bottom:0;z-index:2;padding:5px 6px;font-weight:700;font-size:11px;border-top:2px solid var(--line);background:#fafaf8;text-align:center;white-space:nowrap}
-table.t-mo tfoot td.f-ref{position:sticky;left:0;z-index:3;background:#fafaf8;text-align:left}
-table.t-mo tfoot td.f-nm {position:sticky;left:90px;z-index:3;background:#fafaf8}
-table.t-mo tfoot td.f-st {position:sticky;left:240px;z-index:3;background:#fafaf8;border-right:2px solid var(--line)}
+table.t-mo tfoot td{position:sticky;bottom:0;z-index:2;padding:5px 6px;font-weight:700;font-size:11px;box-shadow:inset 0 2px 0 var(--line);background:#fafaf8;text-align:center;white-space:nowrap}
+table.t-mo tfoot td.f-ref{position:sticky;left:0;z-index:4;background:#fafaf8;text-align:left}
+table.t-mo tfoot td.f-nm {position:sticky;left:90px;z-index:4;background:#fafaf8}
+table.t-mo tfoot td.f-st {position:sticky;left:240px;z-index:4;background:#fafaf8;box-shadow:inset 0 2px 0 var(--line),inset -2px 0 0 var(--line)}
 /* WEEKLY TABLE — triple header for LL pillar view */
 table.t-wk thead tr:nth-child(1) th{position:sticky;top:0;z-index:3;background:#fafaf8;white-space:nowrap}
-table.t-wk thead tr:nth-child(2) th{position:sticky;top:26px;z-index:3;background:#f3f2f0;white-space:nowrap;border-bottom:none}
-table.t-wk thead tr:nth-child(3) th{position:sticky;top:52px;z-index:3;background:#ece9e4;white-space:nowrap;border-bottom:2px solid var(--line)}
+table.t-wk thead tr:nth-child(2) th{position:sticky;z-index:3;background:#f3f2f0;white-space:nowrap}
+table.t-wk thead tr:nth-child(3) th{position:sticky;z-index:3;background:#ece9e4;white-space:nowrap;box-shadow:inset 0 -2px 0 var(--line)}
 .h0{color:var(--line2)}.h1{background:#eaf6f1;color:#0d6e50}
 .h2{background:#c0e9d8;color:#0a5540;font-weight:600}.h3{background:#6fcfae;color:#04362a;font-weight:700}
 .h4{background:#219a6e;color:#fff;font-weight:700}
@@ -490,6 +500,28 @@ function closeLegend(){
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeLegend();});
 
+/* ── STICKY MULTI-ROW HEADER STACKING ──
+   Shared by every multi-row sticky data table (monthly #mTable, quarterly qTb, weekly t-wk).
+   Replaces the old hard-coded top:26/52/78px literals (Cause B): real row heights are measured at
+   runtime and assigned as cumulative `top` offsets so the bands stay flush at any zoom / font
+   rendering / responsive breakpoint. The rowspan'd frozen-left corner cells live only in row 1, so
+   the loop leaves them at top:0 (offset 0) — exactly where they must stay. */
+function stackStickyHeader(tableEl){
+  if(!tableEl||!tableEl.tHead||!tableEl.offsetParent)return;   // skip detached / hidden tables
+  let offset=0;
+  for(const row of Array.from(tableEl.tHead.rows)){
+    for(const cell of row.cells){
+      if(getComputedStyle(cell).position==='sticky')cell.style.top=offset+'px';
+    }
+    offset+=row.getBoundingClientRect().height;   // real, sub-pixel-accurate band height
+  }
+}
+function stackAllStickyHeaders(){
+  document.querySelectorAll('table.t-mo,table.t-wk').forEach(stackStickyHeader);
+}
+let _stkRT;
+window.addEventListener('resize',()=>{clearTimeout(_stkRT);_stkRT=setTimeout(stackAllStickyHeaders,120);});
+
 function _normDusp(tp){const _m={'MSD':'TM','NERA-Maxis':'MAXIS','ETD MAKMUR':'MAXIS','SD':'MAXIS','SAMUDRA':'MAXIS','PERWIRA':'MAXIS','CITAGLOBAL':'MAXIS','AFIINTRA':'MAXIS','NERA-CelcomDigi':'CELCOMDIGI','CCM':'CELCOMDIGI','PERAGOLD':'CELCOMDIGI','OSS':'CELCOMDIGI','RedTone TP':'REDTONE'};return _m[String(tp||'').trim()]||'TM';}
 
 async function boot(){
@@ -576,7 +608,6 @@ function rebuildTRowsAll(){
       if(_globalDUSP&&r.sdusp!==_globalDUSP)return false;
       if(_globalPhase&&r.sphase!==_globalPhase)return false;
       if(_globalState&&r.state!==_globalState)return false;
-      if(_globalProg){const v=r.pr[_globalProg];if(!v||(Array.isArray(v)?v[0]:v)<=0)return false;}
       return true;
     });
   }
@@ -1041,7 +1072,7 @@ function renderMonthly(d){
       <th id="mhState" class="f-st" rowspan="4" style="vertical-align:bottom;cursor:pointer;user-select:none" onclick="mSort('state')">State</th>
       ${hPillar}
       <th colspan="2" rowspan="4" style="text-align:center;padding:5px 6px;font-size:10px;font-weight:700;border-left:2px solid var(--line);white-space:nowrap;vertical-align:middle"><span id="mhTe" style="cursor:pointer;user-select:none" onclick="mSort('te')">Total Ev</span><br><span id="mhTp" style="cursor:pointer;user-select:none" onclick="mSort('tp')">Pax</span></th>
-    </tr><tr>${hSubProg}</tr><tr>${hCombined}</tr><tr><th colspan="${displayPis.length*2}" style="height:5px;padding:0;border:none;background:transparent"></th></tr>`;
+    </tr><tr>${hSubProg}</tr><tr>${hCombined}</tr><tr><th colspan="${displayPis.length*2+2}" style="height:5px;padding:0;border:none;background:#ece9e4;position:sticky;z-index:3"></th></tr>`;
   } else {
     const hdr1=displayPis.map(pi=>{
       const pc=PROG_COLORS[pi%PROG_COLORS.length];const pn=progs[pi]||'';
@@ -1126,6 +1157,7 @@ function renderMonthly(d){
   });
   renderMonthBars();
   fM();
+  requestAnimationFrame(stackAllStickyHeaders);
 }
 
 function renderMonthBars(){
@@ -1176,8 +1208,27 @@ function fM(){
 
   const f=tRowsAll.filter(r=>{
     if(q&&!r.nm.toLowerCase().includes(q)&&!r.ref.toLowerCase().includes(q))return false;
-    if(sf==='a'&&r.st==='u')return false;
-    if(sf==='u'&&r.st!=='u')return false;
+    if(sf==='a'||sf==='u'){
+      const a=aMap[r.i]||{tot:[],pax:[],pr:{}};
+      let rowEv=0;
+      if(dataMonthIdx!==null){
+        if(sp!==''){
+          rowEv=(((a.pr[String(parseInt(sp))]||{}).ev||[])[dataMonthIdx]||0);
+        } else {
+          rowEv=(a.tot[dataMonthIdx]||0);
+        }
+      } else {
+        const activeMI=mi||Object.keys(a.tot||[]).map((_,i)=>i);
+        if(sp!==''){
+          const evArr=((a.pr[String(parseInt(sp))]||{}).ev||[]);
+          rowEv=activeMI.reduce((s,j)=>s+(evArr[j]||0),0);
+        } else {
+          rowEv=activeMI.reduce((s,j)=>s+((a.tot[j]||0)),0);
+        }
+      }
+      if(sf==='u'&&rowEv>3)return false;
+      if(sf==='a'&&rowEv<=3)return false;
+    }
     return true;
   });
   if(_mSort.k){
@@ -1680,7 +1731,7 @@ function rWkByWeek(wk,nd){
     const hPl=_LL_PILLARS.map(pl=>`<th colspan="${pl.subs.length*2}" style="text-align:center;font-size:9px;font-weight:700;color:${pl.c};border-bottom:1px solid ${pl.c}40">${pl.n}</th>`).join('');
     const hPg=_ap.map(({name,color,isFirst})=>{const bl=isFirst?'border-left:1px solid var(--line2)':'border-left:1px dashed var(--line2)';const sh=name.length>13?name.slice(0,12)+'…':name;return`<th colspan="2" style="text-align:center;padding:2px 5px;font-size:7px;font-weight:600;color:${color};${bl};white-space:nowrap">${sh}</th>`;}).join('');
     const hEP=_ap.map(({isFirst})=>{const bl=isFirst?'border-left:1px solid var(--line2)':'';return`<th style="text-align:center;font-size:8px;padding:3px 4px;${bl}">Ev</th><th style="text-align:center;font-size:8px;padding:3px 4px">Pax</th>`;}).join('');
-    return`<tr><th rowspan="4" style="width:26px">#</th><th rowspan="4">NADI site</th><th rowspan="4">State</th>${hPl}<th rowspan="4">Ev.</th><th rowspan="4">Zero</th><th rowspan="4">Part.</th><th rowspan="4">Compl.</th></tr><tr>${hPg}</tr><tr>${hEP}</tr><tr><th colspan="${_ap.length*2}" style="height:5px;padding:0;border:none;background:transparent"></th></tr>`;
+    return`<tr><th rowspan="4" style="width:26px">#</th><th rowspan="4">NADI site</th><th rowspan="4">State</th>${hPl}<th rowspan="4">Ev.</th><th rowspan="4">Zero</th><th rowspan="4">Part.</th><th rowspan="4">Compl.</th></tr><tr>${hPg}</tr><tr>${hEP}</tr><tr><th colspan="${_ap.length*2}" style="height:5px;padding:0;border:none;background:#ece9e4"></th></tr>`;
   })():`<tr><th style="width:26px">#</th><th>NADI site</th><th>State</th><th>Ev.</th><th>Zero</th><th>Part.</th><th>Compl.</th></tr>`;
   window._wkIsLL=isLL;
   document.getElementById('wTC').innerHTML=`
@@ -1701,6 +1752,7 @@ function rWkByWeek(wk,nd){
         <div class="pbody" id="wkPB"></div>
       </div>
     </div>`;fWkN();
+  requestAnimationFrame(stackAllStickyHeaders);
 }
 function fWkN(){
   const d=window._D;if(!d)return;const wk=d.weekly,col=COL[d.nadi.mod]||'#555';
@@ -1840,7 +1892,7 @@ function rWkByNadi(wk,nd){
     const hPl=_LL_PILLARS.map(pl=>`<th colspan="${pl.subs.length*2}" style="text-align:center;font-size:9px;font-weight:700;color:${pl.c};border-bottom:1px solid ${pl.c}40">${pl.n}</th>`).join('');
     const hPg=_ap.map(({name,color,isFirst})=>{const bl=isFirst?'border-left:1px solid var(--line2)':'border-left:1px dashed var(--line2)';const sh=name.length>13?name.slice(0,12)+'…':name;return`<th colspan="2" style="text-align:center;padding:2px 5px;font-size:7px;font-weight:600;color:${color};${bl};white-space:nowrap">${sh}</th>`;}).join('');
     const hEP=_ap.map(({isFirst})=>{const bl=isFirst?'border-left:1px solid var(--line2)':'';return`<th style="text-align:center;font-size:8px;padding:3px 4px;${bl}">Ev</th><th style="text-align:center;font-size:8px;padding:3px 4px">Pax</th>`;}).join('');
-    return`<tr><th rowspan="4" style="width:26px">#</th><th rowspan="4">NADI site</th><th rowspan="4">State</th>${hPl}<th rowspan="4">Total</th><th rowspan="4">Zero</th><th rowspan="4">Part.</th><th rowspan="4">Compl.</th></tr><tr>${hPg}</tr><tr>${hEP}</tr><tr><th colspan="${_ap.length*2}" style="height:5px;padding:0;border:none;background:transparent"></th></tr>`;
+    return`<tr><th rowspan="4" style="width:26px">#</th><th rowspan="4">NADI site</th><th rowspan="4">State</th>${hPl}<th rowspan="4">Total</th><th rowspan="4">Zero</th><th rowspan="4">Part.</th><th rowspan="4">Compl.</th></tr><tr>${hPg}</tr><tr>${hEP}</tr><tr><th colspan="${_ap.length*2}" style="height:5px;padding:0;border:none;background:#ece9e4"></th></tr>`;
   })():`<tr><th style="width:26px">#</th><th>NADI site</th><th>State</th><th>Wks</th><th>Total</th><th>Zero</th><th>Part.</th><th>Compl.</th></tr>`;
   window._bnIsLL=isLL;
   document.getElementById('wTC').innerHTML=`
@@ -1862,6 +1914,7 @@ function rWkByNadi(wk,nd){
       </div>
     </div>`;
   window._bnRows=allRows;window._bnNw=wk.nw;window._bnWks=wk.weeks;fBnN();
+  requestAnimationFrame(stackAllStickyHeaders);
 }
 function fBnN(){
   const d=window._D;if(!d)return;
@@ -2196,6 +2249,7 @@ function renderQuarterly(d){
       <div class="tbl-wrap"><table class="t-mo${pillars?' t-pillar':''}"><thead>${theadHtml}</thead><tbody id="qTb"></tbody></table></div>
     </div>`;
   fQ();
+  requestAnimationFrame(stackAllStickyHeaders);
 }
 function selQtr(qk){_qSel=qk;renderQuarterly(window._D);}
 function qSortF(k){_qSort=_qSort.k===k?{k,d:-_qSort.d}:{k,d:k==='qEv'||k==='qPx'?-1:1};fQ();}
